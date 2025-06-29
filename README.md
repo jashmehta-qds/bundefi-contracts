@@ -1,8 +1,32 @@
+# Bundefi (Ym.sol)
+
+> **Note:**
+> The project is now called **Bundefi**, but the main contract is still named `ym.sol` (short for YieldMax) — old habits die hard! 😄
+
+## What is `ym.sol`?
+
+The [`src/ym.sol`](./src/ym.sol) contract (originally YieldMaxCCIP) is the core of Bundefi's cross-chain DeFi automation. It leverages Chainlink CCIP to securely execute complex, multi-step DeFi strategies across multiple blockchains.
+
+### Key Features
+- **Cross-Chain Execution:** Uses Chainlink CCIP to send and receive cross-chain messages and assets, enabling automated DeFi actions on any allowlisted chain.
+- **Executor Pattern:** Deploys isolated executor contracts for each cross-chain call, ensuring safe, atomic execution and easy recovery from failures.
+- **Escrow & Safety:** Handles both native and ERC20 escrow, with robust error handling, failed message recovery, and emergency withdrawal features.
+- **Gas & Chain Allowlisting:** Enforces gas safety bounds and restricts execution to allowlisted source/destination chains for security.
+- **Multicall Support:** Supports multicall contracts via delegatecall for efficient batch execution.
+
+### Where to Find It
+- Main contract: [`src/ym.sol`](./src/ym.sol)
+- Executor template: defined at the bottom of the same file
+
+---
+
+The rest of this README covers the original Chainlink CCIP starter kit and usage instructions. For Bundefi's custom logic, see [`src/ym.sol`](./src/ym.sol)!
+
 ## Chainlink CCIP Starter Kit
 
 > **Note**
 >
-> _This repository represents an example of using a Chainlink product or service. It is provided to help you understand how to interact with Chainlink’s systems so that you can integrate them into your own. This template is provided "AS IS" without warranties of any kind, has not been audited, and may be missing key checks or error handling to make the usage of the product more clear. Take everything in this repository as an example and not something to be copy pasted into a production ready service._
+> _This repository represents an example of using a Chainlink product or service. It is provided to help you understand how to interact with Chainlink's systems so that you can integrate them into your own. This template is provided "AS IS" without warranties of any kind, has not been audited, and may be missing key checks or error handling to make the usage of the product more clear. Take everything in this repository as an example and not something to be copy pasted into a production ready service._
 
 This project demonstrates a couple of basic Chainlink CCIP use cases.
 
