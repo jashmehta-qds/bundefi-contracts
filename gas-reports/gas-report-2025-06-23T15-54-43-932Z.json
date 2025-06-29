@@ -1,0 +1,50 @@
+[
+  {
+    "functionName": "Contract Deployment",
+    "gasUsed": 144,
+    "timestamp": "2025-06-23T15:54:43.925Z",
+    "description": "Gas cost for deploying YieldMaxCCIP contract"
+  },
+  {
+    "functionName": "sendCrossChainExecution",
+    "gasUsed": 27854,
+    "timestamp": "2025-06-23T15:54:43.925Z",
+    "description": "Send cross-chain execution with tokens"
+  },
+  {
+    "functionName": "ccipReceive",
+    "gasUsed": 27883,
+    "timestamp": "2025-06-23T15:54:43.925Z",
+    "description": "Receive and process cross-chain message"
+  },
+  {
+    "functionName": "allowlistSourceChain",
+    "gasUsed": 46481,
+    "timestamp": "2025-06-23T15:54:43.925Z",
+    "description": "Add/remove source chain from allowlist"
+  },
+  {
+    "functionName": "allowlistDestinationChain",
+    "gasUsed": 24200,
+    "timestamp": "2025-06-23T15:54:43.925Z",
+    "description": "Add/remove destination chain from allowlist"
+  },
+  {
+    "functionName": "estimateFee",
+    "gasUsed": 16257,
+    "timestamp": "2025-06-23T15:54:43.925Z",
+    "description": "Estimate cross-chain execution fee"
+  },
+  {
+    "functionName": "rescueEscrow",
+    "gasUsed": 23809,
+    "timestamp": "2025-06-23T15:54:43.925Z",
+    "description": "Rescue escrowed native tokens"
+  },
+  {
+    "functionName": "rescueERC20Escrow",
+    "gasUsed": 24575,
+    "timestamp": "2025-06-23T15:54:43.925Z",
+    "description": "Rescue escrowed ERC20 tokens"
+  }
+]

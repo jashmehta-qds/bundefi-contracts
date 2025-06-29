@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transaction Encoder with Multicall</title>
+    <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: #fafafa;
+        }
+        .section h3 {
+            margin-top: 0;
+            color: #555;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #333;
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-family: monospace;
+        }
+        textarea {
+            height: 100px;
+            resize: vertical;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .btn-success { background: #28a745; }
+        .btn-success:hover { background: #218838; }
+        .btn-danger { background: #dc3545; }
+        .btn-danger:hover { background: #c82333; }
+        .btn-warning { background: #ffc107; color: #212529; }
+        .btn-warning:hover { background: #e0a800; }
+        
+        .result {
+            background: #e8f5e8;
+            border: 1px solid #4caf50;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 15px;
+            word-break: break-all;
+            font-family: monospace;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .error {
+            background: #ffe8e8;
+            border: 1px solid #f44336;
+            color: #d32f2f;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .grid-3 {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 15px;
+        }
+        @media (max-width: 768px) {
+            .grid, .grid-3 {
+                grid-template-columns: 1fr;
+            }
+        }
+        .preset-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .preset-buttons button {
+            background: #28a745;
+            font-size: 14px;
+            padding: 8px 16px;
+        }
+        .preset-buttons button:hover {
+            background: #218838;
+        }
+        
+        /* Multicall specific styles */
+        .multicall-call {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 15px;
+            position: relative;
+        }
+        .multicall-call h4 {
+            margin: 0 0 15px 0;
+            color: #495057;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .call-number {
+            background: #007bff;
+            color: white;
+            border-radius: 50%;
+            width: 25px;
+            height: 25px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .remove-call {
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 5px 10px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .remove-call:hover {
+            background: #c82333;
+        }
+        .multicall-summary {
+            background: #e7f3ff;
+            border: 1px solid #b3d7ff;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+        .function-templates {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+        .function-templates h5 {
+            margin: 0 0 10px 0;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Transaction Encoder with Multicall</h1>
+        
+        <!-- Multicall Builder -->
+        <div class="section">
+            <h3>🔄 Multicall Builder</h3>
+            <p>Build complex multi-step transactions that execute atomically in a single cross-chain call.</p>
+            
+            <div class="multicall-summary" id="multicallSummary">
+                <strong>📊 Current Multicall:</strong> <span id="callCount">0</span> calls
+                <div id="callsList"></div>
+            </div>
+            
+            <div class="function-templates">
+                <h5>📚 Quick Add Functions:</h5>
+                <div class="preset-buttons">
+                    <button onclick="addQuickCall('transfer')">ERC20 Transfer</button>
+                    <button onclick="addQuickCall('approve')">ERC20 Approve</button>
+                    <button onclick="addQuickCall('swap')">DEX Swap</button>
+                    <button onclick="addQuickCall('deposit')">Deposit</button>
+                    <button onclick="addQuickCall('withdraw')">Withdraw</button>
+                    <button onclick="addQuickCall('stake')">Stake</button>
+                    <button onclick="addQuickCall('custom')">Custom Call</button>
+                </div>
+            </div>
+            
+            <div id="multicallCalls"></div>
+            
+            <div style="margin-top: 20px;">
+                <button class="btn-success" onclick="addNewCall()">➕ Add Call</button>
+                <button class="btn-warning" onclick="clearAllCalls()">🗑️ Clear All</button>
+                <button onclick="encodeMulticall()">🔗 Encode Multicall</button>
+                <button onclick="loadMulticallPreset()">📋 Load Preset</button>
+            </div>
+            
+            <div id="multicallResult"></div>
+        </div>
+        
+        <div class="grid">
+            <!-- ERC20 Operations -->
+            <div class="section">
+                <h3>📤 ERC20 Operations</h3>
+                <div class="preset-buttons">
+                    <button onclick="loadPreset('usdcTransfer')">USDC Transfer</button>
+                    <button onclick="loadPreset('usdcApprove')">USDC Approve</button>
+                    <button onclick="loadPreset('unlimitedApprove')">Unlimited Approve</button>
+                    <button onclick="loadPreset('revokeApprove')">Revoke Approve</button>
+                </div>
+                
+                <div class="form-group">
+                    <label>Token Contract Address:</label>
+                    <input type="text" id="tokenAddress" placeholder="0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913">
+                </div>
+                
+                <div class="form-group">
+                    <label>Operation Type:</label>
+                    <select id="erc20Operation">
+                        <option value="transfer">Transfer</option>
+                        <option value="approve">Approve</option>
+                        <option value="transferFrom">Transfer From</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>To/Spender Address:</label>
+                    <input type="text" id="erc20To" placeholder="0x...">
+                </div>
+                
+                <div class="form-group">
+                    <label>From Address (for transferFrom):</label>
+                    <input type="text" id="erc20From" placeholder="0x...">
+                </div>
+                
+                <div class="form-group">
+                    <label>Amount:</label>
+                    <input type="text" id="erc20Amount" placeholder="100">
+                </div>
+                
+                <div class="form-group">
+                    <label>Decimals:</label>
+                    <input type="number" id="erc20Decimals" value="18">
+                </div>
+                
+                <button onclick="encodeERC20()">Encode ERC20</button>
+                <div id="erc20Result"></div>
+            </div>
+
+            <!-- Custom Function -->
+            <div class="section">
+                <h3>🔧 Custom Function</h3>
+                <div class="preset-buttons">
+                    <button onclick="loadPreset('echo')">Echo Function</button>
+                    <button onclick="loadPreset('mint')">Mint Function</button>
+                </div>
+                
+                <div class="form-group">
+                    <label>Function Signature:</label>
+                    <input type="text" id="functionSig" placeholder="function transfer(address,uint256)">
+                </div>
+                
+                <div class="form-group">
+                    <label>Parameters (comma-separated):</label>
+                    <textarea id="functionParams" placeholder="0x742d35Cc6634C0532925a3b8D5c5a4e5d6d8d6e5,1000000000000000000"></textarea>
+                </div>
+                
+                <button onclick="encodeCustomFunction()">Encode Function</button>
+                <div id="functionResult"></div>
+            </div>
+        </div>
+
+        <!-- Cross-Chain Execution -->
+        <div class="section">
+            <h3>🌉 Cross-Chain Execution</h3>
+            <div class="preset-buttons">
+                <button onclick="loadPreset('crossChainUSDC')">Cross-Chain USDC</button>
+                <button onclick="loadPreset('crossChainEcho')">Cross-Chain Echo</button>
+                <button onclick="loadPreset('crossChainMulticall')">Cross-Chain Multicall</button>
+            </div>
+            
+            <div class="grid">
+                <div>
+                    <div class="form-group">
+                        <label>Destination Chain:</label>
+                        <select id="destinationChain">
+                            <option value="avalanche">Avalanche</option>
+                            <option value="base">Base</option>
+                            <option value="ethereum">Ethereum</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Receiver Address:</label>
+                        <input type="text" id="receiver" placeholder="0x379154D8C0b0B19B773f841554f7b7Ad445cA244">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Target Contract:</label>
+                        <input type="text" id="targetContract" placeholder="0x...">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>ETH Value:</label>
+                        <input type="text" id="ethValue" placeholder="0.1">
+                    </div>
+                </div>
+                
+                <div>
+                    <div class="form-group">
+                        <label>Token Addresses (one per line):</label>
+                        <textarea id="tokenAddresses" placeholder="0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Token Amounts (one per line):</label>
+                        <textarea id="tokenAmounts" placeholder="1000000"></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Call Data:</label>
+                        <textarea id="callData" placeholder="0x..."></textarea>
+                    </div>
+                </div>
+            </div>
+            
+            <button onclick="encodeCrossChain()">Encode Cross-Chain</button>
+            <div id="crossChainResult"></div>
+        </div>
+
+        <!-- Transaction Decoder -->
+        <div class="section">
+            <h3>🔍 Transaction Decoder</h3>
+            <div class="form-group">
+                <label>Encoded Transaction Data:</label>
+                <textarea id="decodeTxData" placeholder="0x..."></textarea>
+            </div>
+            
+            <div class="form-group">
+                <label>Function Signature (optional):</label>
+                <input type="text" id="decodeFunctionSig" placeholder="function sendCrossChainExecution(uint64,address,address,uint256,address[],uint256[],bytes)">
+            </div>
+            
+            <button onclick="decodeTransaction()">Decode Transaction</button>
+            <div id="decodeResult"></div>
+        </div>
+    </div>
+
+    <script>
+        // Global state for multicall
+        let multicallCalls = [];
+        let callCounter = 0;
+
+        // Contract addresses and common values
+        const ADDRESSES = {
+            USDC_BASE: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+            WETH_BASE: '0x4200000000000000000000000000000000000006',
+            YIELDMAX_BASE: '0xe97978aB28f4d340494293a519B8Ba7Ab6E9640F',
+            YIELDMAX_AVALANCHE: '0x379154D8C0b0B19B773f841554f7b7Ad445cA244'
+        };
+
+        const CHAIN_SELECTORS = {
+            ethereum: '5009297550715157269',
+            base: '10344971235874465080', 
+            avalanche: '14767482510784806043'
+        };
+
+        // Function templates for quick adding
+        const FUNCTION_TEMPLATES = {
+            transfer: {
+                name: 'ERC20 Transfer',
+                signature: 'function transfer(address,uint256)',
+                fields: [
+                    { name: 'Token Contract', type: 'address', placeholder: ADDRESSES.USDC_BASE },
+                    { name: 'To Address', type: 'address', placeholder: '0x...' },
+                    { name: 'Amount', type: 'uint256', placeholder: '1000000' }
+                ]
+            },
+            approve: {
+                name: 'ERC20 Approve',
+                signature: 'function approve(address,uint256)',
+                fields: [
+                    { name: 'Token Contract', type: 'address', placeholder: ADDRESSES.USDC_BASE },
+                    { name: 'Spender Address', type: 'address', placeholder: '0x...' },
+                    { name: 'Amount', type: 'uint256', placeholder: '1000000' }
+                ]
+            },
+            swap: {
+                name: 'DEX Swap',
+                signature: 'function swapExactTokensForTokens(uint256,uint256,address[],address,uint256)',
+                fields: [
+                    { name: 'DEX Contract', type: 'address', placeholder: '0x...' },
+                    { name: 'Amount In', type: 'uint256', placeholder: '1000000' },
+                    { name: 'Amount Out Min', type: 'uint256', placeholder: '950000' },
+                    { name: 'Path (comma-separated)', type: 'address[]', placeholder: ADDRESSES.USDC_BASE + ',' + ADDRESSES.WETH_BASE },
+                    { name: 'To Address', type: 'address', placeholder: '0x...' },
+                    { name: 'Deadline', type: 'uint256', placeholder: Math.floor(Date.now() / 1000) + 3600 }
+                ]
+            },
+            deposit: {
+                name: 'Deposit',
+                signature: 'function deposit(uint256)',
+                fields: [
+                    { name: 'Protocol Contract', type: 'address', placeholder: '0x...' },
+                    { name: 'Amount', type: 'uint256', placeholder: '1000000' }
+                ]
+            },
+            withdraw: {
+                name: 'Withdraw',
+                signature: 'function withdraw(uint256)',
+                fields: [
+                    { name: 'Protocol Contract', type: 'address', placeholder: '0x...' },
+                    { name: 'Amount', type: 'uint256', placeholder: '1000000' }
+                ]
+            },
+            stake: {
+                name: 'Stake',
+                signature: 'function stake(uint256)',
+                fields: [
+                    { name: 'Staking Contract', type: 'address', placeholder: '0x...' },
+                    { name: 'Amount', type: 'uint256', placeholder: '1000000' }
+                ]
+            },
+            custom: {
+                name: 'Custom Call',
+                signature: 'function customFunction()',
+                fields: [
+                    { name: 'Target Contract', type: 'address', placeholder: '0x...' },
+                    { name: 'Function Signature', type: 'string', placeholder: 'function myFunction(uint256)' },
+                    { name: 'Parameters (comma-separated)', type: 'string', placeholder: '123,0x...' }
+                ]
+            }
+        };
+
+        // Add a new call to multicall
+        function addNewCall() {
+            addQuickCall('custom');
+        }
+
+        // Add a quick call based on template
+        function addQuickCall(templateName) {
+            const template = FUNCTION_TEMPLATES[templateName];
+            if (!template) return;
+
+            const callId = ++callCounter;
+            const call = {
+                id: callId,
+                template: templateName,
+                name: template.name,
+                signature: template.signature,
+                target: '',
+                parameters: {},
+                encoded: ''
+            };
+
+            multicallCalls.push(call);
+            renderMulticallCalls();
+            updateMulticallSummary();
+        }
+
+        // Remove a call from multicall
+        function removeCall(callId) {
+            multicallCalls = multicallCalls.filter(call => call.id !== callId);
+            renderMulticallCalls();
+            updateMulticallSummary();
+        }
+
+        // Clear all calls
+        function clearAllCalls() {
+            multicallCalls = [];
+            callCounter = 0;
+            renderMulticallCalls();
+            updateMulticallSummary();
+        }
+
+        // Render all multicall calls
+        function renderMulticallCalls() {
+            const container = document.getElementById('multicallCalls');
+            container.innerHTML = '';
+
+            multicallCalls.forEach((call, index) => {
+                const template = FUNCTION_TEMPLATES[call.template];
+                const callDiv = document.createElement('div');
+                callDiv.className = 'multicall-call';
+                callDiv.innerHTML = `
+                    <h4>
+                        <span><span class="call-number">${index + 1}</span> ${call.name}</span>
+                        <button class="remove-call" onclick="removeCall(${call.id})">Remove</button>
+                    </h4>
+                    <div class="grid-3">
+                        ${template.fields.map(field => `
+                            <div class="form-group">
+                                <label>${field.name}:</label>
+                                <input type="text" 
+                                       id="call_${call.id}_${field.name.replace(/\s/g, '').toLowerCase()}"
+                                       placeholder="${field.placeholder}"
+                                       onchange="updateCallParameter(${call.id}, '${field.name}', this.value)">
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div style="margin-top: 15px;">
+                        <button onclick="encodeCall(${call.id})" style="font-size: 14px; padding: 8px 16px;">
+                            🔗 Encode This Call
+                        </button>
+                        <div id="call_${call.id}_result" style="margin-top: 10px; font-size: 12px; color: #666;"></div>
+                    </div>
+                `;
+                container.appendChild(callDiv);
+            });
+        }
+
+        // Update call parameter
+        function updateCallParameter(callId, fieldName, value) {
+            const call = multicallCalls.find(c => c.id === callId);
+            if (call) {
+                call.parameters[fieldName] = value;
+                if (fieldName === 'Target Contract') {
+                    call.target = value;
+                }
+            }
+        }
+
+        // Encode individual call
+        function encodeCall(callId) {
+            const call = multicallCalls.find(c => c.id === callId);
+            if (!call) return;
+
+            try {
+                const template = FUNCTION_TEMPLATES[call.template];
+                let signature = call.parameters['Function Signature'] || template.signature;
+                let params = [];
+
+                if (call.template === 'custom') {
+                    // Handle custom function
+                    const paramStr = call.parameters['Parameters (comma-separated)'] || '';
+                    params = paramStr.split(',').map(p => p.trim()).filter(p => p);
+                } else {
+                    // Handle template functions
+                    template.fields.slice(1).forEach(field => { // Skip first field (contract address)
+                        let value = call.parameters[field.name] || '';
+                        if (field.type === 'address[]') {
+                            value = value.split(',').map(addr => addr.trim());
+                        }
+                        params.push(value);
+                    });
+                }
+
+                const iface = new ethers.utils.Interface([signature]);
+                const functionName = signature.match(/function\s+(\w+)/)[1];
+                const encoded = iface.encodeFunctionData(functionName, params);
+                
+                call.encoded = encoded;
+                
+                document.getElementById(`call_${callId}_result`).innerHTML = `
+                    <strong>Target:</strong> ${call.target}<br>
+                    <strong>Data:</strong> ${encoded}
+                `;
+                
+                updateMulticallSummary();
+                
+            } catch (error) {
+                document.getElementById(`call_${callId}_result`).innerHTML = `
+                    <span style="color: red;">Error: ${error.message}</span>
+                `;
+            }
+        }
+
+        // Update multicall summary
+        function updateMulticallSummary() {
+            document.getElementById('callCount').textContent = multicallCalls.length;
+            
+            const callsList = document.getElementById('callsList');
+            if (multicallCalls.length === 0) {
+                callsList.innerHTML = '<div style="margin-top: 10px; color: #666;">No calls added yet</div>';
+            } else {
+                callsList.innerHTML = `
+                    <div style="margin-top: 10px;">
+                        ${multicallCalls.map((call, index) => `
+                            <div style="margin: 5px 0; font-size: 14px;">
+                                ${index + 1}. ${call.name} → ${call.target || 'No target set'}
+                                ${call.encoded ? '✅' : '⚠️'}
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+        }
+
+        // Encode full multicall
+        function encodeMulticall() {
+            if (multicallCalls.length === 0) {
+                showResult('multicallResult', 'No calls to encode', true);
+                return;
+            }
+
+            try {
+                // Encode each call first
+                multicallCalls.forEach(call => {
+                    if (!call.encoded) {
+                        encodeCall(call.id);
+                    }
+                });
+
+                // Build multicall structure
+                const calls = multicallCalls.map(call => ({
+                    target: call.target,
+                    data: call.encoded
+                }));
+
+                // Encode as multicall
+                const multicallInterface = new ethers.utils.Interface([
+                    'function multicall(tuple(address target, bytes data)[] calls) returns (bytes[] results)'
+                ]);
+                
+                const multicallEncoded = multicallInterface.encodeFunctionData('multicall', [calls]);
+
+                const result = `
+                    <strong>🔄 Multicall Encoded:</strong><br>
+                    <strong>Calls Count:</strong> ${calls.length}<br>
+                    <strong>Encoded Data:</strong><br>
+                    <textarea readonly style="width: 100%; height: 100px; margin: 10px 0;">${multicallEncoded}</textarea>
+                    
+                    <strong>📋 Call Details:</strong><br>
+                    ${calls.map((call, index) => `
+                        <div style="margin: 10px 0; padding: 10px; background: #f8f9fa; border-radius: 4px;">
+                            <strong>Call ${index + 1}:</strong><br>
+                            Target: ${call.target}<br>
+                            Data: ${call.data}
+                        </div>
+                    `).join('')}
+                    
+                    <strong>💡 Usage:</strong><br>
+                    Use this encoded data as the 'callData' parameter in your cross-chain execution.
+                `;
+
+                showResult('multicallResult', result);
+                
+            } catch (error) {
+                showResult('multicallResult', `Encoding failed: ${error.message}`, true);
+            }
+        }
+
+        // Load multicall preset
+        function loadMulticallPreset() {
+            clearAllCalls();
+            
+            // Add a sample DeFi workflow
+            addQuickCall('approve');
+            setTimeout(() => {
+                // Set approve parameters
+                document.getElementById('call_1_tokencontract').value = ADDRESSES.USDC_BASE;
+                document.getElementById('call_1_spenderaddress').value = '0x1234...'; // DEX address
+                document.getElementById('call_1_amount').value = '1000000';
+                updateCallParameter(1, 'Token Contract', ADDRESSES.USDC_BASE);
+                updateCallParameter(1, 'Spender Address', '0x1234...');
+                updateCallParameter(1, 'Amount', '1000000');
+                
+                addQuickCall('swap');
+                setTimeout(() => {
+                    // Set swap parameters
+                    document.getElementById('call_2_dexcontract').value = '0x1234...';
+                    document.getElementById('call_2_amountin').value = '1000000';
+                    document.getElementById('call_2_amountoutmin').value = '950000';
+                    updateCallParameter(2, 'DEX Contract', '0x1234...');
+                    updateCallParameter(2, 'Amount In', '1000000');
+                    updateCallParameter(2, 'Amount Out Min', '950000');
+                    
+                    addQuickCall('deposit');
+                    setTimeout(() => {
+                        // Set deposit parameters
+                        document.getElementById('call_3_protocolcontract').value = '0x5678...';
+                        document.getElementById('call_3_amount').value = '950000';
+                        updateCallParameter(3, 'Protocol Contract', '0x5678...');
+                        updateCallParameter(3, 'Amount', '950000');
+                        
+                        updateMulticallSummary();
+                    }, 100);
+                }, 100);
+            }, 100);
+        }
+
+        // Rest of the existing functions...
+        const presets = {
+            usdcTransfer: {
+                tokenAddress: ADDRESSES.USDC_BASE,
+                erc20Operation: 'transfer',
+                erc20To: '0x1958E5D7477ed777390e7034A9CC9719632838C3',
+                erc20Amount: '1000',
+                erc20Decimals: 6
+            },
+            usdcApprove: {
+                tokenAddress: ADDRESSES.USDC_BASE,
+                erc20Operation: 'approve',
+                erc20To: ADDRESSES.YIELDMAX_BASE,
+                erc20Amount: '1000',
+                erc20Decimals: 6
+            },
+            unlimitedApprove: {
+                tokenAddress: ADDRESSES.USDC_BASE,
+                erc20Operation: 'approve',
+                erc20To: ADDRESSES.YIELDMAX_BASE,
+                erc20Amount: 'unlimited',
+                erc20Decimals: 6
+            },
+            revokeApprove: {
+                tokenAddress: ADDRESSES.USDC_BASE,
+                erc20Operation: 'approve',
+                erc20To: ADDRESSES.YIELDMAX_BASE,
+                erc20Amount: '0',
+                erc20Decimals: 6
+            },
+            echo: {
+                functionSig: 'function echo(string)',
+                functionParams: 'Hello Cross-Chain'
+            },
+            mint: {
+                functionSig: 'function mint(address,uint256)',
+                functionParams: '0x1958E5D7477ed777390e7034A9CC9719632838C3,1'
+            },
+            crossChainUSDC: {
+                destinationChain: 'avalanche',
+                receiver: ADDRESSES.YIELDMAX_AVALANCHE,
+                targetContract: '0x1958E5D7477ed777390e7034A9CC9719632838C3',
+                ethValue: '0',
+                tokenAddresses: ADDRESSES.USDC_BASE,
+                tokenAmounts: '1000000',
+                callData: '' // Will be filled by ERC20 encoder
+            },
+            crossChainEcho: {
+                destinationChain: 'avalanche',
+                receiver: ADDRESSES.YIELDMAX_AVALANCHE,
+                targetContract: '0xEchoContract...',
+                ethValue: '0.1',
+                tokenAddresses: '',
+                tokenAmounts: '',
+                callData: '' // Will be filled by function encoder
+            },
+            crossChainMulticall: {
+                destinationChain: 'avalanche',
+                receiver: ADDRESSES.YIELDMAX_AVALANCHE,
+                targetContract: '0xMulticallContract...',
+                ethValue: '0',
+                tokenAddresses: ADDRESSES.USDC_BASE,
+                tokenAmounts: '1000000',
+                callData: '' // Will be filled by multicall encoder
+            }
+        };
+
+        function loadPreset(name) {
+            const preset = presets[name];
+            if (!preset) return;
+
+            Object.keys(preset).forEach(key => {
+                const element = document.getElementById(key);
+                if (element) {
+                    element.value = preset[key];
+                }
+            });
+        }
+
+        function encodeERC20() {
+            try {
+                const tokenAddress = document.getElementById('tokenAddress').value;
+                const operation = document.getElementById('erc20Operation').value;
+                const to = document.getElementById('erc20To').value;
+                const from = document.getElementById('erc20From').value;
+                const amount = document.getElementById('erc20Amount').value;
+                const decimals = parseInt(document.getElementById('erc20Decimals').value);
+
+                let parsedAmount;
+                if (amount.toLowerCase() === 'unlimited' || amount === 'max') {
+                    parsedAmount = ethers.constants.MaxUint256;
+                } else {
+                    parsedAmount = ethers.utils.parseUnits(amount, decimals);
+                }
+
+                let iface, encoded;
+                
+                switch (operation) {
+                    case 'transfer':
+                        iface = new ethers.utils.Interface(['function transfer(address,uint256)']);
+                        encoded = iface.encodeFunctionData('transfer', [to, parsedAmount]);
+                        break;
+                    case 'approve':
+                        iface = new ethers.utils.Interface(['function approve(address,uint256)']);
+                        encoded = iface.encodeFunctionData('approve', [to, parsedAmount]);
+                        break;
+                    case 'transferFrom':
+                        iface = new ethers.utils.Interface(['function transferFrom(address,address,uint256)']);
+                        encoded = iface.encodeFunctionData('transferFrom', [from, to, parsedAmount]);
+                        break;
+                }
+
+                const result = `
+                    <strong>Token:</strong> ${tokenAddress}<br>
+                    <strong>Operation:</strong> ${operation}<br>
+                    <strong>Amount:</strong> ${parsedAmount.toString()}<br>
+                    <strong>Encoded:</strong> ${encoded}
+                `;
+                
+                showResult('erc20Result', result);
+                
+            } catch (error) {
+                showResult('erc20Result', `Error: ${error.message}`, true);
+            }
+        }
+
+        function encodeCustomFunction() {
+            try {
+                const signature = document.getElementById('functionSig').value;
+                const paramsStr = document.getElementById('functionParams').value;
+                
+                const params = paramsStr.split(',').map(p => p.trim()).filter(p => p);
+                
+                const iface = new ethers.utils.Interface([signature]);
+                const functionName = signature.match(/function\s+(\w+)/)[1];
+                const encoded = iface.encodeFunctionData(functionName, params);
+                
+                showResult('functionResult', `<strong>Encoded:</strong> ${encoded}`);
+                
+            } catch (error) {
+                showResult('functionResult', `Error: ${error.message}`, true);
+            }
+        }
+
+        function encodeCrossChain() {
+            try {
+                const destinationChain = document.getElementById('destinationChain').value;
+                const receiver = document.getElementById('receiver').value;
+                const targetContract = document.getElementById('targetContract').value;
+                const ethValue = document.getElementById('ethValue').value;
+                const tokenAddressesStr = document.getElementById('tokenAddresses').value;
+                const tokenAmountsStr = document.getElementById('tokenAmounts').value;
+                const callData = document.getElementById('callData').value || '0x';
+
+                const tokenAddresses = tokenAddressesStr.split('\n').map(a => a.trim()).filter(a => a);
+                const tokenAmounts = tokenAmountsStr.split('\n').map(a => a.trim()).filter(a => a);
+
+                const chainSelector = CHAIN_SELECTORS[destinationChain] || destinationChain;
+                const parsedValue = ethValue ? ethers.utils.parseEther(ethValue) : 0;
+
+                const iface = new ethers.utils.Interface([
+                    'function sendCrossChainExecution(uint64,address,address,uint256,address[],uint256[],bytes)'
+                ]);
+                
+                const encoded = iface.encodeFunctionData('sendCrossChainExecution', [
+                    chainSelector,
+                    receiver,
+                    targetContract,
+                    parsedValue,
+                    tokenAddresses,
+                    tokenAmounts,
+                    callData
+                ]);
+
+                const result = `
+                    <strong>Destination:</strong> ${destinationChain} (${chainSelector})<br>
+                    <strong>Receiver:</strong> ${receiver}<br>
+                    <strong>Target:</strong> ${targetContract}<br>
+                    <strong>Value:</strong> ${ethValue} ETH<br>
+                    <strong>Tokens:</strong> ${tokenAddresses.length}<br>
+                    <strong>Encoded:</strong><br>
+                    <textarea readonly style="width: 100%; height: 100px;">${encoded}</textarea>
+                `;
+                
+                showResult('crossChainResult', result);
+                
+            } catch (error) {
+                showResult('crossChainResult', `Error: ${error.message}`, true);
+            }
+        }
+
+        function decodeTransaction() {
+            try {
+                const txData = document.getElementById('decodeTxData').value;
+                const functionSig = document.getElementById('decodeFunctionSig').value;
+                
+                if (!functionSig) {
+                    // Try to decode as generic transaction
+                    const decoded = ethers.utils.defaultAbiCoder.decode(['bytes'], txData);
+                    showResult('decodeResult', `<strong>Raw Decode:</strong> ${JSON.stringify(decoded, null, 2)}`);
+                    return;
+                }
+                
+                const iface = new ethers.utils.Interface([functionSig]);
+                const decoded = iface.decodeFunctionData(functionSig.match(/function\s+(\w+)/)[1], txData);
+                
+                showResult('decodeResult', `<strong>Decoded:</strong><br><pre>${JSON.stringify(decoded, null, 2)}</pre>`);
+                
+            } catch (error) {
+                showResult('decodeResult', `Error: ${error.message}`, true);
+            }
+        }
+
+        function showResult(elementId, message, isError = false) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = message;
+            element.className = isError ? 'result error' : 'result';
+        }
+
+        // Initialize
+        updateMulticallSummary();
+    </script>
+</body>
+</html> 

@@ -1,0 +1,17 @@
+{
+  "name": "ccip-starter-kit-foundry",
+  "dependencies": {
+    "@chainlink/local": "^0.2.5-beta",
+    "ethers": "^5.8.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.0.0"
+  },
+  "scripts": {
+    "gas-report": "ts-node scripts/gas-tracker.ts",
+    "update-readme": "ts-node scripts/gas-tracker.ts --update-readme",
+    "test-gas-tracker": "ts-node scripts/test-gas-tracker.ts"
+  }
+}

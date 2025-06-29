@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ERC20 Approval Wallet</title>
+    <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+    <!-- Web3Modal v2 - browser compatible -->
+    <script src="https://unpkg.com/@walletconnect/web3modal@1.9.12/dist/index.umd.min.js"></script>
+    <script src="https://unpkg.com/@walletconnect/client@1.8.0/dist/index.umd.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .section { border: 2px solid #ddd; padding: 20px; margin: 20px 0; border-radius: 10px; }
+        .connected { border-color: #4caf50; background: #f0fff0; }
+        .disconnected { border-color: #f44336; background: #fff0f0; }
+        button { padding: 10px 20px; margin: 5px; border: none; border-radius: 5px; cursor: pointer; }
+        .primary { background: #007bff; color: white; }
+        .success { background: #28a745; color: white; }
+        .danger { background: #dc3545; color: white; }
+        .wallet-btn { background: #6c5ce7; color: white; font-size: 16px; padding: 12px 24px; }
+        input, select { width: 100%; padding: 8px; margin: 5px 0; border: 1px solid #ddd; border-radius: 4px; }
+        .result { margin: 10px 0; padding: 10px; border-radius: 5px; word-break: break-all; }
+        .success-result { background: #d4edda; border: 1px solid #c3e6cb; }
+        .error-result { background: #f8d7da; border: 1px solid #f5c6cb; }
+        .wallet-options { display: flex; gap: 10px; flex-wrap: wrap; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h1>🔐 ERC20 Approval Wallet</h1>
+    
+    <div id="walletSection" class="section disconnected">
+        <h3>Wallet Connection</h3>
+        <div id="status">Not Connected</div>
+        
+        <div class="wallet-options">
+            <button id="connectMetaMask" class="primary" onclick="connectMetaMask()">🦊 MetaMask</button>
+            <button id="connectWalletConnect" class="wallet-btn" onclick="connectWalletConnect()">📱 WalletConnect</button>
+            <button id="connectCoinbase" class="primary" onclick="connectCoinbase()">🔵 Coinbase</button>
+            <button id="disconnectBtn" class="danger" onclick="disconnectWallet()" disabled>Disconnect</button>
+        </div>
+        
+        <div id="accountInfo" style="display:none;">
+            <p><strong>Account:</strong> <span id="account"></span></p>
+            <p><strong>Balance:</strong> <span id="balance"></span> ETH</p>
+            <p><strong>Network:</strong> <span id="network"></span></p>
+        </div>
+    </div>
+
+    <div class="section">
+        <h3>🚀 Cross-Chain Execution (YieldMax CCIP)</h3>
+        
+        <div style="margin-bottom: 20px;">
+            <button class="success" onclick="loadCCIPPreset('baseToAvalanche')">Base → Avalanche</button>
+            <button class="success" onclick="loadCCIPPreset('avalancheToBase')">Avalanche → Base</button>
+            <button class="primary" onclick="loadCCIPPreset('custom')">Custom Setup</button>
+        </div>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div>
+                <label>YieldMax Contract Address:</label>
+                <input type="text" id="yieldMaxAddress" placeholder="0xe97978aB28f4d340494293a519B8Ba7Ab6E9640F">
+                
+                <label>Destination Chain Selector:</label>
+                <select id="destinationChain" onchange="updateChainInfo()">
+                    <option value="14767482510784806043">Avalanche (14767482510784806043)</option>
+                    <option value="10344971235874465080">Base (10344971235874465080)</option>
+                    <option value="5009297550715157269">Ethereum (5009297550715157269)</option>
+                    <option value="4949039107694359620">Arbitrum (4949039107694359620)</option>
+                </select>
+                
+                <label>Receiver Address (YieldMax on destination):</label>
+                <input type="text" id="receiverAddress" placeholder="0x379154D8C0b0B19B773f841554f7b7Ad445cA244">
+                
+                <label>Target Contract (to execute on):</label>
+                <input type="text" id="targetContract" placeholder="0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E">
+                
+                <label>ETH Value (wei):</label>
+                <input type="text" id="ethValue" placeholder="0" value="0">
+            </div>
+            
+            <div>
+                <label>Token Addresses (comma-separated):</label>
+                <input type="text" id="tokenAddresses" placeholder="0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913">
+                
+                <label>Token Amounts (comma-separated):</label>
+                <input type="text" id="tokenAmounts" placeholder="1000000">
+                
+                <label>Call Data (hex):</label>
+                <textarea id="callData" rows="3" placeholder="0xa9059cbb0000000000000000000000001958e5d7477ed777390e7034a9cc9719632838c30000000000000000000000000000000000000000000000000000000000002710"></textarea>
+                
+                <div style="margin-top: 10px;">
+                    <button class="primary" onclick="openCallDataBuilder()">🔧 Build Call Data</button>
+                    <button class="primary" onclick="estimateCCIPFee()">💰 Estimate Fee</button>
+                </div>
+            </div>
+        </div>
+        
+        <div style="margin-top: 20px;">
+            <button id="executeCCIPBtn" class="success" onclick="executeCrossChain()" disabled>🚀 Execute Cross-Chain</button>
+            <button class="primary" onclick="previewCCIPTransaction()">👀 Preview</button>
+        </div>
+        
+        <div id="ccipResult"></div>
+    </div>
+
+    <!-- Call Data Builder Modal -->
+    <div id="callDataModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 10px; width: 80%; max-width: 600px; max-height: 80%; overflow-y: auto;">
+            <h3>🔧 Call Data Builder</h3>
+            
+            <label>Function Type:</label>
+            <select id="functionType" onchange="updateFunctionBuilder()">
+                <option value="erc20Transfer">ERC20 Transfer</option>
+                <option value="erc20Approve">ERC20 Approve</option>
+                <option value="multicall">Multicall</option>
+                <option value="custom">Custom Function</option>
+            </select>
+            
+            <div id="functionParams"></div>
+            
+            <div style="margin-top: 20px;">
+                <button class="success" onclick="buildCallData()">🔨 Build Call Data</button>
+                <button class="danger" onclick="closeCallDataBuilder()">Cancel</button>
+            </div>
+            
+            <div id="builtCallData" style="margin-top: 15px;"></div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h3>ERC20 Token Approval</h3>
+        
+        <div style="margin-bottom: 20px;">
+            <button class="success" onclick="loadPreset('usdc')">USDC → YieldMax</button>
+            <button class="success" onclick="loadPreset('unlimited')">Unlimited Approval</button>
+            <button class="danger" onclick="loadPreset('revoke')">Revoke Approval</button>
+        </div>
+        
+        <label>Token Address:</label>
+        <input type="text" id="tokenAddress" placeholder="0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913">
+        
+        <label>Spender Address:</label>
+        <input type="text" id="spenderAddress" placeholder="0xe97978aB28f4d340494293a519B8Ba7Ab6E9640F">
+        
+        <label>Approval Type:</label>
+        <select id="approvalType" onchange="updateApprovalType()">
+            <option value="specific">Specific Amount</option>
+            <option value="unlimited">Unlimited</option>
+            <option value="revoke">Revoke (0)</option>
+        </select>
+        
+        <label>Amount:</label>
+        <input type="text" id="amount" placeholder="1000">
+        
+        <label>Decimals:</label>
+        <input type="number" id="decimals" value="6" min="0" max="18">
+        
+        <div style="margin-top: 20px;">
+            <button id="approveBtn" class="primary" onclick="executeApproval()" disabled>Execute Approval</button>
+            <button class="primary" onclick="previewTransaction()">Preview</button>
+            <button class="primary" onclick="checkAllowance()">Check Allowance</button>
+        </div>
+        
+        <div id="result"></div>
+    </div>
+
+    <script>
+        let provider, signer, userAccount, web3Modal, walletConnectProvider;
+        
+        const presets = {
+            usdc: {
+                token: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+                spender: '0xe97978aB28f4d340494293a519B8Ba7Ab6E9640F',
+                amount: '1000',
+                decimals: 6,
+                type: 'specific'
+            },
+            unlimited: {
+                token: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+                spender: '0xe97978aB28f4d340494293a519B8Ba7Ab6E9640F',
+                amount: '',
+                decimals: 6,
+                type: 'unlimited'
+            },
+            revoke: {
+                token: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+                spender: '0xe97978aB28f4d340494293a519B8Ba7Ab6E9640F',
+                amount: '0',
+                decimals: 6,
+                type: 'revoke'
+            }
+        };
+
+        // Initialize Web3Modal for WalletConnect
+        function initWeb3Modal() {
+            try {
+                if (typeof WalletConnectWeb3Modal !== 'undefined') {
+                    const providerOptions = {
+                        walletconnect: {
+                            package: WalletConnectClient,
+                            options: {
+                                infuraId: "9aa3d95b3bc440fa88ea12eaa4456161" // Public Infura ID
+                            }
+                        }
+                    };
+
+                    web3Modal = new WalletConnectWeb3Modal.Web3Modal({
+                        network: "mainnet",
+                        cacheProvider: true,
+                        providerOptions
+                    });
+                    
+                    console.log('Web3Modal initialized for WalletConnect');
+                }
+            } catch (error) {
+                console.log('Web3Modal not available, using direct connections only');
+            }
+        }
+
+        // Enhanced MetaMask detection and connection
+        async function connectMetaMask() {
+            try {
+                console.log('Attempting MetaMask connection...');
+                
+                // Check for Ethereum provider
+                if (!window.ethereum) {
+                    throw new Error('No Ethereum wallet found. Please install MetaMask from https://metamask.io/');
+                }
+
+                let ethereum = window.ethereum;
+                
+                // Handle multiple providers (MetaMask + other wallets)
+                if (ethereum.providers?.length) {
+                    console.log('Multiple providers detected:', ethereum.providers.length);
+                    ethereum = ethereum.providers.find(p => p.isMetaMask) || ethereum.providers[0];
+                    console.log('Using provider:', ethereum.isMetaMask ? 'MetaMask' : 'Other wallet');
+                }
+
+                // Request connection
+                updateStatus('Connecting to MetaMask...', false);
+                provider = new ethers.providers.Web3Provider(ethereum);
+                
+                const accounts = await ethereum.request({ 
+                    method: 'eth_requestAccounts' 
+                });
+                
+                if (!accounts || accounts.length === 0) {
+                    throw new Error('No accounts found. Please unlock your wallet.');
+                }
+
+                signer = provider.getSigner();
+                userAccount = await signer.getAddress();
+                
+                console.log('✅ Connected to:', userAccount);
+                await updateUI();
+                updateStatus('Connected via MetaMask', true);
+                showResult(`✅ Connected to MetaMask: ${userAccount}`, true);
+                
+            } catch (error) {
+                console.error('MetaMask connection failed:', error);
+                updateStatus('Connection failed', false);
+                
+                let message = error.message;
+                if (error.code === 4001) {
+                    message = 'Connection rejected. Please approve the connection in MetaMask.';
+                } else if (error.code === -32002) {
+                    message = 'Connection pending. Please check MetaMask and approve the request.';
+                }
+                
+                showResult(`❌ MetaMask connection failed: ${message}`, false);
+            }
+        }
+
+        // WalletConnect connection
+        async function connectWalletConnect() {
+            try {
+                if (!web3Modal) {
+                    throw new Error('WalletConnect not available. Please use MetaMask or install a compatible wallet.');
+                }
+                
+                updateStatus('Opening WalletConnect...', false);
+                
+                walletConnectProvider = await web3Modal.connect();
+                provider = new ethers.providers.Web3Provider(walletConnectProvider);
+                signer = provider.getSigner();
+                userAccount = await signer.getAddress();
+                
+                // Listen for account changes
+                walletConnectProvider.on("accountsChanged", (accounts) => {
+                    if (accounts.length === 0) {
+                        disconnectWallet();
+                    } else {
+                        userAccount = accounts[0];
+                        updateUI();
+                    }
+                });
+
+                walletConnectProvider.on("disconnect", () => {
+                    disconnectWallet();
+                });
+                
+                await updateUI();
+                updateStatus('Connected via WalletConnect', true);
+                showResult(`✅ Connected via WalletConnect: ${userAccount}`, true);
+                
+            } catch (error) {
+                console.error('WalletConnect failed:', error);
+                updateStatus('Connection failed', false);
+                showResult(`❌ WalletConnect failed: ${error.message}`, false);
+            }
+        }
+
+        // Coinbase Wallet connection
+        async function connectCoinbase() {
+            try {
+                if (!window.ethereum?.isCoinbaseWallet && !window.ethereum?.providers?.find(p => p.isCoinbaseWallet)) {
+                    throw new Error('Coinbase Wallet not found. Please install Coinbase Wallet extension.');
+                }
+                
+                let ethereum = window.ethereum;
+                if (ethereum.providers?.length) {
+                    ethereum = ethereum.providers.find(p => p.isCoinbaseWallet) || ethereum;
+                }
+                
+                updateStatus('Connecting to Coinbase Wallet...', false);
+                provider = new ethers.providers.Web3Provider(ethereum);
+                
+                const accounts = await ethereum.request({ 
+                    method: 'eth_requestAccounts' 
+                });
+                
+                signer = provider.getSigner();
+                userAccount = await signer.getAddress();
+                
+                await updateUI();
+                updateStatus('Connected via Coinbase Wallet', true);
+                showResult(`✅ Connected to Coinbase Wallet: ${userAccount}`, true);
+                
+            } catch (error) {
+                console.error('Coinbase connection failed:', error);
+                updateStatus('Connection failed', false);
+                showResult(`❌ Coinbase Wallet connection failed: ${error.message}`, false);
+            }
+        }
+
+        // Disconnect all wallets
+        async function disconnectWallet() {
+            try {
+                if (walletConnectProvider?.disconnect) {
+                    await walletConnectProvider.disconnect();
+                }
+                
+                if (web3Modal?.clearCachedProvider) {
+                    web3Modal.clearCachedProvider();
+                }
+                
+                provider = signer = userAccount = walletConnectProvider = null;
+                
+                await updateUI();
+                updateStatus('Disconnected', false);
+                showResult('Wallet disconnected', true);
+                
+            } catch (error) {
+                console.error('Disconnect error:', error);
+                // Force disconnect anyway
+                provider = signer = userAccount = walletConnectProvider = null;
+                updateUI();
+                updateStatus('Disconnected', false);
+            }
+        }
+
+        async function updateUI() {
+            const connected = !!userAccount;
+            
+            // Update button states
+            document.getElementById('connectMetaMask').disabled = connected;
+            document.getElementById('connectWalletConnect').disabled = connected;
+            document.getElementById('connectCoinbase').disabled = connected;
+            document.getElementById('disconnectBtn').disabled = !connected;
+            document.getElementById('approveBtn').disabled = !connected;
+            
+            // Show/hide account info
+            const accountInfo = document.getElementById('accountInfo');
+            accountInfo.style.display = connected ? 'block' : 'none';
+            
+            if (connected && provider) {
+                try {
+                    // Update account display
+                    document.getElementById('account').textContent = userAccount;
+                    
+                    // Update balance
+                    const balance = await provider.getBalance(userAccount);
+                    document.getElementById('balance').textContent = ethers.utils.formatEther(balance);
+                    
+                    // Update network
+                    const network = await provider.getNetwork();
+                    const networkNames = {
+                        1: 'Ethereum Mainnet',
+                        8453: 'Base',
+                        43114: 'Avalanche',
+                        137: 'Polygon'
+                    };
+                    document.getElementById('network').textContent = 
+                        networkNames[network.chainId] || `Chain ${network.chainId}`;
+                        
+                } catch (error) {
+                    console.error('Error updating UI:', error);
+                }
+            }
+        }
+
+        function updateStatus(message, connected) {
+            document.getElementById('status').textContent = message;
+            const section = document.getElementById('walletSection');
+            section.className = `section ${connected ? 'connected' : 'disconnected'}`;
+        }
+
+        function loadPreset(name) {
+            const preset = presets[name];
+            if (preset) {
+                document.getElementById('tokenAddress').value = preset.token;
+                document.getElementById('spenderAddress').value = preset.spender;
+                document.getElementById('amount').value = preset.amount;
+                document.getElementById('decimals').value = preset.decimals;
+                document.getElementById('approvalType').value = preset.type;
+                updateApprovalType();
+            }
+        }
+
+        function updateApprovalType() {
+            const type = document.getElementById('approvalType').value;
+            const amountField = document.getElementById('amount');
+            
+            switch (type) {
+                case 'unlimited':
+                    amountField.value = 'MAX';
+                    amountField.disabled = true;
+                    break;
+                case 'revoke':
+                    amountField.value = '0';
+                    amountField.disabled = true;
+                    break;
+                default:
+                    amountField.disabled = false;
+                    if (amountField.value === 'MAX' || amountField.value === '0') {
+                        amountField.value = '1000';
+                    }
+            }
+        }
+
+        function getApprovalParams() {
+            const tokenAddress = document.getElementById('tokenAddress').value;
+            const spenderAddress = document.getElementById('spenderAddress').value;
+            const type = document.getElementById('approvalType').value;
+            const decimals = parseInt(document.getElementById('decimals').value);
+            
+            let amount;
+            switch (type) {
+                case 'unlimited':
+                    amount = ethers.constants.MaxUint256;
+                    break;
+                case 'revoke':
+                    amount = ethers.BigNumber.from(0);
+                    break;
+                default:
+                    const amountStr = document.getElementById('amount').value;
+                    amount = ethers.utils.parseUnits(amountStr, decimals);
+            }
+
+            return { tokenAddress, spenderAddress, amount };
+        }
+
+        async function previewTransaction() {
+            try {
+                if (!signer) throw new Error('Wallet not connected');
+                
+                const { tokenAddress, spenderAddress, amount } = getApprovalParams();
+                
+                const contract = new ethers.Contract(
+                    tokenAddress,
+                    ['function approve(address,uint256) returns (bool)'],
+                    signer
+                );
+
+                const gas = await contract.estimateGas.approve(spenderAddress, amount);
+                const gasPrice = await provider.getGasPrice();
+                const cost = gas.mul(gasPrice);
+
+                showResult(`
+                    <strong>📋 Transaction Preview:</strong><br>
+                    Token: ${tokenAddress}<br>
+                    Spender: ${spenderAddress}<br>
+                    Amount: ${amount.toString()}<br>
+                    Est. Gas: ${gas.toString()}<br>
+                    Est. Cost: ${ethers.utils.formatEther(cost)} ETH
+                `, true);
+            } catch (error) {
+                showResult(`❌ Preview failed: ${error.message}`, false);
+            }
+        }
+
+        async function checkAllowance() {
+            try {
+                if (!provider || !userAccount) throw new Error('Wallet not connected');
+                
+                const tokenAddress = document.getElementById('tokenAddress').value;
+                const spenderAddress = document.getElementById('spenderAddress').value;
+                const decimals = parseInt(document.getElementById('decimals').value);
+                
+                const contract = new ethers.Contract(
+                    tokenAddress,
+                    ['function allowance(address,address) view returns (uint256)'],
+                    provider
+                );
+
+                const allowance = await contract.allowance(userAccount, spenderAddress);
+                const formatted = ethers.utils.formatUnits(allowance, decimals);
+
+                showResult(`
+                    <strong>🔍 Current Allowance:</strong><br>
+                    Raw: ${allowance.toString()}<br>
+                    Formatted: ${formatted} tokens
+                `, true);
+            } catch (error) {
+                showResult(`❌ Check failed: ${error.message}`, false);
+            }
+        }
+
+        async function executeApproval() {
+            try {
+                if (!signer) throw new Error('Wallet not connected');
+                
+                const { tokenAddress, spenderAddress, amount } = getApprovalParams();
+                
+                const contract = new ethers.Contract(
+                    tokenAddress,
+                    ['function approve(address,uint256) returns (bool)'],
+                    signer
+                );
+
+                showResult('⏳ Waiting for approval...', true);
+                
+                const tx = await contract.approve(spenderAddress, amount);
+                showResult(`📤 Transaction sent: ${tx.hash}<br>Waiting for confirmation...`, true);
+                
+                const receipt = await tx.wait();
+                showResult(`
+                    ✅ <strong>Approval Successful!</strong><br>
+                    Hash: ${receipt.transactionHash}<br>
+                    Block: ${receipt.blockNumber}<br>
+                    Gas Used: ${receipt.gasUsed.toString()}
+                `, true);
+                
+                updateUI();
+                
+            } catch (error) {
+                let msg = error.message;
+                if (error.code === 4001) msg = 'Transaction rejected by user';
+                showResult(`❌ Approval failed: ${msg}`, false);
+            }
+        }
+
+        function showResult(message, success) {
+            const result = document.getElementById('result');
+            result.innerHTML = message;
+            result.className = `result ${success ? 'success-result' : 'error-result'}`;
+        }
+
+        // Auto-detect and connect if already connected
+        async function checkExistingConnections() {
+            try {
+                // Check MetaMask
+                if (window.ethereum?.selectedAddress) {
+                    console.log('Existing MetaMask connection detected');
+                    await connectMetaMask();
+                    return;
+                }
+                
+                // Check cached WalletConnect
+                if (web3Modal?.cachedProvider) {
+                    console.log('Cached WalletConnect connection detected');
+                    await connectWalletConnect();
+                    return;
+                }
+                
+                showResult('👋 Ready to connect! Choose your preferred wallet above.', true);
+                
+            } catch (error) {
+                console.log('No existing connections found');
+                showResult('👋 Ready to connect! Choose your preferred wallet above.', true);
+            }
+        }
+
+        // CCIP Cross-Chain Execution Functions
+        const ccipPresets = {
+            baseToAvalanche: {
+                yieldMax: '0xe97978aB28f4d340494293a519B8Ba7Ab6E9640F',
+                destinationChain: '14767482510784806043',
+                receiver: '0x379154D8C0b0B19B773f841554f7b7Ad445cA244',
+                target: '0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E',
+                tokens: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+                amounts: '1000000'
+            },
+            avalancheToBase: {
+                yieldMax: '0x379154D8C0b0B19B773f841554f7b7Ad445cA244',
+                destinationChain: '10344971235874465080',
+                receiver: '0xe97978aB28f4d340494293a519B8Ba7Ab6E9640F',
+                target: '0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E',
+                tokens: '0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E',
+                amounts: '1000000'
+            },
+            custom: {
+                yieldMax: '',
+                destinationChain: '14767482510784806043',
+                receiver: '',
+                target: '',
+                tokens: '',
+                amounts: ''
+            }
+        };
+
+        function loadCCIPPreset(name) {
+            const preset = ccipPresets[name];
+            if (preset) {
+                document.getElementById('yieldMaxAddress').value = preset.yieldMax;
+                document.getElementById('destinationChain').value = preset.destinationChain;
+                document.getElementById('receiverAddress').value = preset.receiver;
+                document.getElementById('targetContract').value = preset.target;
+                document.getElementById('tokenAddresses').value = preset.tokens;
+                document.getElementById('tokenAmounts').value = preset.amounts;
+                updateChainInfo();
+            }
+        }
+
+        function updateChainInfo() {
+            const chainSelector = document.getElementById('destinationChain').value;
+            const chainNames = {
+                '14767482510784806043': 'Avalanche',
+                '10344971235874465080': 'Base',
+                '5009297550715157269': 'Ethereum',
+                '4949039107694359620': 'Arbitrum'
+            };
+            console.log(`Selected chain: ${chainNames[chainSelector] || 'Unknown'}`);
+        }
+
+        function getCCIPParams() {
+            const yieldMaxAddress = document.getElementById('yieldMaxAddress').value;
+            const destinationChainSelector = document.getElementById('destinationChain').value;
+            const receiver = document.getElementById('receiverAddress').value;
+            const targetContract = document.getElementById('targetContract').value;
+            const ethValue = document.getElementById('ethValue').value || '0';
+            
+            const tokenAddressesStr = document.getElementById('tokenAddresses').value;
+            const tokenAmountsStr = document.getElementById('tokenAmounts').value;
+            const callData = document.getElementById('callData').value || '0x';
+            
+            const tokenAddresses = tokenAddressesStr ? tokenAddressesStr.split(',').map(addr => addr.trim()) : [];
+            const tokenAmounts = tokenAmountsStr ? tokenAmountsStr.split(',').map(amt => amt.trim()) : [];
+            
+            return {
+                yieldMaxAddress,
+                destinationChainSelector,
+                receiver,
+                targetContract,
+                ethValue,
+                tokenAddresses,
+                tokenAmounts,
+                callData
+            };
+        }
+
+        async function estimateCCIPFee() {
+            try {
+                if (!provider) throw new Error('Wallet not connected');
+                
+                const params = getCCIPParams();
+                
+                // Import ABI (you'll need to include this)
+                const yieldMaxABI = [
+                    "function estimateFee(uint64 destinationChainSelector, address receiver, address targetContract, uint256 value, address[] calldata tokenAddresses, uint256[] calldata tokenAmounts, bytes calldata callData) external view returns (uint256)"
+                ];
+                
+                const contract = new ethers.Contract(params.yieldMaxAddress, yieldMaxABI, provider);
+                
+                const fee = await contract.estimateFee(
+                    params.destinationChainSelector,
+                    params.receiver,
+                    params.targetContract,
+                    params.ethValue,
+                    params.tokenAddresses,
+                    params.tokenAmounts,
+                    params.callData
+                );
+                
+                showCCIPResult(`
+                    <strong>💰 Estimated Fee:</strong><br>
+                    ${ethers.utils.formatEther(fee)} ETH<br>
+                    <small>Raw: ${fee.toString()} wei</small>
+                `, true);
+                
+            } catch (error) {
+                showCCIPResult(`❌ Fee estimation failed: ${error.message}`, false);
+            }
+        }
+
+        async function previewCCIPTransaction() {
+            try {
+                const params = getCCIPParams();
+                
+                showCCIPResult(`
+                    <strong>📋 Cross-Chain Transaction Preview:</strong><br>
+                    <strong>From:</strong> ${params.yieldMaxAddress}<br>
+                    <strong>To Chain:</strong> ${params.destinationChainSelector}<br>
+                    <strong>Receiver:</strong> ${params.receiver}<br>
+                    <strong>Target:</strong> ${params.targetContract}<br>
+                    <strong>ETH Value:</strong> ${params.ethValue} wei<br>
+                    <strong>Tokens:</strong> ${params.tokenAddresses.length} token(s)<br>
+                    <strong>Call Data:</strong> ${params.callData.substring(0, 50)}...
+                `, true);
+                
+            } catch (error) {
+                showCCIPResult(`❌ Preview failed: ${error.message}`, false);
+            }
+        }
+
+        async function executeCrossChain() {
+            try {
+                if (!signer) throw new Error('Wallet not connected');
+                
+                const params = getCCIPParams();
+                
+                // Full YieldMax ABI for sendCrossChainExecution
+                const yieldMaxABI = [
+                    "function sendCrossChainExecution(uint64 destinationChainSelector, address receiver, address targetContract, uint256 value, address[] calldata tokenAddresses, uint256[] calldata tokenAmounts, bytes calldata callData) external payable",
+                    "function estimateFee(uint64 destinationChainSelector, address receiver, address targetContract, uint256 value, address[] calldata tokenAddresses, uint256[] calldata tokenAmounts, bytes calldata callData) external view returns (uint256)"
+                ];
+                
+                const contract = new ethers.Contract(params.yieldMaxAddress, yieldMaxABI, signer);
+                
+                // Estimate fee first
+                const fee = await contract.estimateFee(
+                    params.destinationChainSelector,
+                    params.receiver,
+                    params.targetContract,
+                    params.ethValue,
+                    params.tokenAddresses,
+                    params.tokenAmounts,
+                    params.callData
+                );
+                
+                showCCIPResult(`⏳ Executing cross-chain transaction...<br>Fee: ${ethers.utils.formatEther(fee)} ETH`, true);
+                
+                // Execute the transaction
+                const tx = await contract.sendCrossChainExecution(
+                    params.destinationChainSelector,
+                    params.receiver,
+                    params.targetContract,
+                    params.ethValue,
+                    params.tokenAddresses,
+                    params.tokenAmounts,
+                    params.callData,
+                    { value: fee }
+                );
+                
+                showCCIPResult(`📤 Transaction sent: ${tx.hash}<br>Waiting for confirmation...`, true);
+                
+                const receipt = await tx.wait();
+                showCCIPResult(`
+                    ✅ <strong>Cross-Chain Execution Successful!</strong><br>
+                    Hash: ${receipt.transactionHash}<br>
+                    Block: ${receipt.blockNumber}<br>
+                    Gas Used: ${receipt.gasUsed.toString()}<br>
+                    Fee Paid: ${ethers.utils.formatEther(fee)} ETH
+                `, true);
+                
+            } catch (error) {
+                let msg = error.message;
+                if (error.code === 4001) msg = 'Transaction rejected by user';
+                showCCIPResult(`❌ Cross-chain execution failed: ${msg}`, false);
+            }
+        }
+
+        function showCCIPResult(message, success) {
+            const result = document.getElementById('ccipResult');
+            result.innerHTML = message;
+            result.className = `result ${success ? 'success-result' : 'error-result'}`;
+        }
+
+        // Call Data Builder Functions
+        function openCallDataBuilder() {
+            document.getElementById('callDataModal').style.display = 'block';
+            updateFunctionBuilder();
+        }
+
+        function closeCallDataBuilder() {
+            document.getElementById('callDataModal').style.display = 'none';
+        }
+
+        function updateFunctionBuilder() {
+            const functionType = document.getElementById('functionType').value;
+            const paramsDiv = document.getElementById('functionParams');
+            
+            let html = '';
+            
+            switch (functionType) {
+                case 'erc20Transfer':
+                    html = `
+                        <label>To Address:</label>
+                        <input type="text" id="transferTo" placeholder="0x1958E5D7477ed777390e7034A9CC9719632838C3">
+                        <label>Amount:</label>
+                        <input type="text" id="transferAmount" placeholder="10000">
+                    `;
+                    break;
+                case 'erc20Approve':
+                    html = `
+                        <label>Spender Address:</label>
+                        <input type="text" id="approveSpender" placeholder="0x...">
+                        <label>Amount:</label>
+                        <input type="text" id="approveAmount" placeholder="10000">
+                    `;
+                    break;
+                case 'multicall':
+                    html = `
+                        <label>Target Address:</label>
+                        <input type="text" id="multicallTarget" placeholder="0x...">
+                        <label>Call Data:</label>
+                        <textarea id="multicallData" rows="3" placeholder="0xa9059cbb..."></textarea>
+                    `;
+                    break;
+                case 'custom':
+                    html = `
+                        <label>Function Signature:</label>
+                        <input type="text" id="customSignature" placeholder="function transfer(address,uint256)">
+                        <label>Parameters (JSON array):</label>
+                        <textarea id="customParams" rows="3" placeholder='["0x...", "1000"]'></textarea>
+                    `;
+                    break;
+            }
+            
+            paramsDiv.innerHTML = html;
+        }
+
+        function buildCallData() {
+            try {
+                const functionType = document.getElementById('functionType').value;
+                let callData = '';
+                
+                switch (functionType) {
+                    case 'erc20Transfer':
+                        const transferTo = document.getElementById('transferTo').value;
+                        const transferAmount = document.getElementById('transferAmount').value;
+                        
+                        const transferInterface = new ethers.utils.Interface([
+                            "function transfer(address to, uint256 amount)"
+                        ]);
+                        callData = transferInterface.encodeFunctionData("transfer", [transferTo, transferAmount]);
+                        break;
+                        
+                    case 'erc20Approve':
+                        const approveSpender = document.getElementById('approveSpender').value;
+                        const approveAmount = document.getElementById('approveAmount').value;
+                        
+                        const approveInterface = new ethers.utils.Interface([
+                            "function approve(address spender, uint256 amount)"
+                        ]);
+                        callData = approveInterface.encodeFunctionData("approve", [approveSpender, approveAmount]);
+                        break;
+                        
+                    case 'multicall':
+                        const multicallTarget = document.getElementById('multicallTarget').value;
+                        const multicallData = document.getElementById('multicallData').value;
+                        
+                        const multicallInterface = new ethers.utils.Interface([
+                            "function multicall(tuple(address target, bytes data)[] calls)"
+                        ]);
+                        callData = multicallInterface.encodeFunctionData("multicall", [[[multicallTarget, multicallData]]]);
+                        break;
+                        
+                    case 'custom':
+                        const signature = document.getElementById('customSignature').value;
+                        const paramsStr = document.getElementById('customParams').value;
+                        const params = JSON.parse(paramsStr);
+                        
+                        const customInterface = new ethers.utils.Interface([signature]);
+                        const functionName = signature.match(/function\s+(\w+)/)[1];
+                        callData = customInterface.encodeFunctionData(functionName, params);
+                        break;
+                }
+                
+                document.getElementById('builtCallData').innerHTML = `
+                    <strong>✅ Generated Call Data:</strong><br>
+                    <textarea readonly style="width: 100%; height: 100px;">${callData}</textarea>
+                    <button onclick="useBuiltCallData('${callData}')" class="success">Use This Call Data</button>
+                `;
+                
+            } catch (error) {
+                document.getElementById('builtCallData').innerHTML = `
+                    <span style="color: red;">❌ Error: ${error.message}</span>
+                `;
+            }
+        }
+
+        function useBuiltCallData(callData) {
+            document.getElementById('callData').value = callData;
+            closeCallDataBuilder();
+            showCCIPResult('✅ Call data updated!', true);
+        }
+
+        // Update UI to enable CCIP button when wallet is connected
+        async function updateUI() {
+            if (signer && userAccount) {
+                document.getElementById('approveBtn').disabled = false;
+                document.getElementById('executeCCIPBtn').disabled = false;
+                
+                const balance = await provider.getBalance(userAccount);
+                document.getElementById('balance').textContent = ethers.utils.formatEther(balance);
+                document.getElementById('account').textContent = userAccount;
+                document.getElementById('accountInfo').style.display = 'block';
+                
+                const network = await provider.getNetwork();
+                document.getElementById('network').textContent = network.name;
+            }
+        }
+
+        // Initialize on page load
+        window.addEventListener('load', async () => {
+            console.log('🚀 Initializing wallet interface...');
+            
+            // Initialize Web3Modal
+            initWeb3Modal();
+            
+            // Check for existing connections
+            await checkExistingConnections();
+            
+            console.log('✅ Wallet interface ready!');
+        });
+    </script>
+</body>
+</html> 

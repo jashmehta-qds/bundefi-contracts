@@ -1,0 +1,1773 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YieldMax CCIP Wallet Interface</title>
+    <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .section { border: 2px solid #ddd; padding: 20px; margin: 20px 0; border-radius: 10px; }
+        .connected { border-color: #4caf50; background: #f0fff0; }
+        .disconnected { border-color: #f44336; background: #fff0f0; }
+        button { padding: 10px 20px; margin: 5px; border: none; border-radius: 5px; cursor: pointer; }
+        .primary { background: #007bff; color: white; }
+        .success { background: #28a745; color: white; }
+        .danger { background: #dc3545; color: white; }
+        .wallet-btn { background: #6c5ce7; color: white; font-size: 16px; padding: 12px 24px; }
+        input, select, textarea { width: 100%; padding: 8px; margin: 5px 0; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        .result { margin: 10px 0; padding: 10px; border-radius: 5px; word-break: break-all; }
+        .success-result { background: #d4edda; border: 1px solid #c3e6cb; }
+        .error-result { background: #f8d7da; border: 1px solid #f5c6cb; }
+        .wallet-options { display: flex; gap: 10px; flex-wrap: wrap; margin: 10px 0; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; }
+        .modal-content { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 10px; width: 80%; max-width: 600px; max-height: 80%; overflow-y: auto; }
+        .ccip-section { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+        .ccip-section h3 { margin-top: 0; }
+    </style>
+</head>
+<body>
+    <h1>🚀 YieldMax CCIP Wallet Interface</h1>
+    
+    <div id="walletSection" class="section disconnected">
+        <h3>Wallet Connection</h3>
+        <div id="status">Not Connected</div>
+        
+        <div class="wallet-options">
+            <button id="connectMetaMask" class="primary" onclick="connectMetaMask()">🦊 MetaMask</button>
+            <button id="disconnectBtn" class="danger" onclick="disconnectWallet()" disabled>Disconnect</button>
+        </div>
+        
+        <div id="accountInfo" style="display:none;">
+            <p><strong>Account:</strong> <span id="account"></span></p>
+            <p><strong>Balance:</strong> <span id="balance"></span> ETH</p>
+            <p><strong>Network:</strong> <span id="network"></span></p>
+        </div>
+    </div>
+
+    <div class="section ccip-section">
+        <h3>🌉 Cross-Chain Execution (YieldMax CCIP)</h3>
+        
+        <div style="margin-bottom: 20px;">
+            <button class="success" onclick="loadCCIPPreset('baseToAvalanche')">Base → Avalanche</button>
+            <button class="success" onclick="loadCCIPPreset('avalancheToBase')">Avalanche → Base</button>
+            <button class="primary" onclick="loadCCIPPreset('custom')">Custom Setup</button>
+        </div>
+        
+        <div class="grid-2">
+            <div>
+                <label>YieldMax Contract Address:</label>
+                <input type="text" id="yieldMaxAddress" placeholder="0xe97978aB28f4d340494293a519B8Ba7Ab6E9640F">
+                
+                <label>Destination Chain:</label>
+                <select id="destinationChain" onchange="updateChainInfo()">
+                    <option value="6433500567565415381">Avalanche</option>
+                    <option value="10344971235874465080">Base</option>
+                    <option value="5009297550715157269">Ethereum</option>
+                    <option value="4949039107694359620">Arbitrum</option>
+                </select>
+                
+                <label>Receiver Address (YieldMax on destination):</label>
+                <input type="text" id="receiverAddress" placeholder="0x379154D8C0b0B19B773f841554f7b7Ad445cA244">
+                
+                <label>Target Contract (to execute on):</label>
+                <input type="text" id="targetContract" placeholder="0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E">
+                
+                <label>ETH Value (wei):</label>
+                <input type="text" id="ethValue" placeholder="0" value="0">
+                
+                <label>Additional ETH to Send (ETH):</label>
+                <input type="text" id="additionalEth" placeholder="0.1" value="0">
+                <small style="color: #ccc;">This ETH will be sent along with the transaction (in addition to CCIP fees)</small>
+            </div>
+            
+            <div>
+                <label>Token Addresses (comma-separated):</label>
+                <input type="text" id="tokenAddresses" placeholder="0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913">
+                
+                <label>Token Amounts (comma-separated):</label>
+                <input type="text" id="tokenAmounts" placeholder="1000000">
+                
+                <label>Call Data (hex):</label>
+                <textarea id="callData" rows="3" placeholder="0xa9059cbb0000000000000000000000001958e5d7477ed777390e7034a9cc9719632838c30000000000000000000000000000000000000000000000000000000000002710"></textarea>
+                
+                <label>Gas Limit:</label>
+                <input type="number" id="gasLimit" placeholder="500000" value="500000" min="21000" max="5000000">
+                <small style="color: #ccc;">Gas limit for execution on destination chain (21,000 - 5,000,000)</small>
+                
+                <div style="margin-top: 10px;">
+                    <button class="primary" onclick="openCallDataBuilder()">🔧 Build Call Data</button>
+                    <button class="primary" onclick="estimateCCIPFee()">💰 Estimate Fee</button>
+                    <button class="primary" onclick="showGasLimitGuide()">⛽ Gas Guide</button>
+                </div>
+            </div>
+        </div>
+        
+        <div style="margin-top: 20px;">
+            <button id="executeCCIPBtn" class="success" onclick="executeCrossChain()" disabled>🚀 Execute Cross-Chain</button>
+            <button class="primary" onclick="previewCCIPTransaction()">👀 Preview</button>
+        </div>
+        
+        <div id="ccipResult"></div>
+    </div>
+
+    <!-- Call Data Builder Modal -->
+    <div id="callDataModal" class="modal">
+        <div class="modal-content">
+            <h3>🔧 Call Data Builder</h3>
+            
+            <label>Function Type:</label>
+            <select id="functionType" onchange="updateFunctionBuilder()">
+                <option value="erc20Transfer">ERC20 Transfer</option>
+                <option value="erc20Approve">ERC20 Approve</option>
+                <option value="custom">Custom Function</option>
+            </select>
+            
+            <div id="functionParams"></div>
+            
+            <div style="margin-top: 20px;">
+                <button class="success" onclick="buildCallData()">🔨 Build Call Data</button>
+                <button class="danger" onclick="closeCallDataBuilder()">Cancel</button>
+            </div>
+            
+            <div id="builtCallData" style="margin-top: 15px;"></div>
+        </div>
+    </div>
+
+    <!-- Executor Address Prediction Section -->
+    <div class="section">
+        <h3>🔮 Executor Address Prediction</h3>
+        <strong> Base Contract: </strong>0x60bd626cbc6a68d3eaf7add0872551fa1738d4e3<br/>
+        <strong> Avax Contract:</strong> 0x6b9C88C44Eb53A3d2994d05Fc14D86D542Ec0F75<br/>
+
+        <div style="margin-bottom: 20px;">
+            <button class="success" onclick="loadExecutorPreset('base')">Base YieldMax</button>
+            <button class="success" onclick="loadExecutorPreset('avalanche')">Avalanche YieldMax</button>
+            <button class="primary" onclick="loadExecutorPreset('custom')">Custom Contract</button>
+        </div>
+        
+        <label>YieldMax Contract Address:</label>
+        <input type="text" id="executorYieldMaxAddress" placeholder="0xe97978aB28f4d340494293a519B8Ba7Ab6E9640F">
+        
+        <label>Sender Address (your wallet or custom):</label>
+        <input type="text" id="executorSenderAddress" placeholder="Will auto-fill with connected wallet">
+        
+        <div style="margin-top: 20px;">
+            <button class="primary" onclick="predictExecutorAddress()">🔮 Predict Executor Address</button>
+            <button class="primary" onclick="checkExecutorExists()">🔍 Check if Exists</button>
+        </div>
+        
+        <div id="executorResult"></div>
+    </div>
+
+    <!-- Enso Integration Section -->
+    <div class="section">
+        <h3>🎯 Enso Integration</h3>
+        
+        <div style="margin-bottom: 20px;">
+            <button class="success" onclick="loadEnsoPreset('ethToUsdc')">ETH → USDC</button>
+            <button class="success" onclick="loadEnsoPreset('usdcToWeth')">USDC → WETH</button>
+            <button class="success" onclick="loadEnsoPreset('aaveDeposit')">AAVE Deposit</button>
+            <button class="primary" onclick="loadEnsoPreset('custom')">Custom Route</button>
+        </div>
+        
+        <div class="grid-2">
+            <div>
+                <h4>📋 Token Approval (Enso)</h4>
+                
+                <label>Token Address:</label>
+                <input type="text" id="ensoTokenAddress" placeholder="0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913">
+                
+                <label>Amount:</label>
+                <input type="text" id="ensoAmount" placeholder="1000000">
+                
+                <label>From Address:</label>
+                <input type="text" id="ensoFromAddress" placeholder="Will auto-fill with connected wallet">
+                
+                <label>Chain ID:</label>
+                <select id="ensoChainId">
+                    <option value="8453">Base (8453)</option>
+                    <option value="43114">Avalanche (43114)</option>
+                    <option value="1">Ethereum (1)</option>
+                    <option value="42161">Arbitrum (42161)</option>
+                </select>
+                
+                <div style="margin-top: 10px;">
+                    <button class="primary" onclick="getEnsoApproval()">📋 Get Approval Data</button>
+                    <button class="success" onclick="testEnsoApprovalExample()">🧪 Test Example</button>
+                </div>
+                
+                <div id="ensoApprovalResult"></div>
+            </div>
+            
+            <div>
+                <h4>🛣️ Route Data (Enso)</h4>
+                
+                <label>From Token:</label>
+                <input type="text" id="ensoFromToken" placeholder="0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913">
+                
+                <label>To Token:</label>
+                <input type="text" id="ensoToToken" placeholder="0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359">
+                
+                <label>Amount In:</label>
+                <input type="text" id="ensoAmountIn" placeholder="1000000">
+                
+                <label>From Address:</label>
+                <input type="text" id="ensoFromAddress" placeholder="Your wallet address">
+                
+                <label>To Address:</label>
+                <input type="text" id="ensoToAddress" placeholder="Destination address">
+                
+                <label>Slippage (%):</label>
+                <input type="number" id="ensoSlippage" placeholder="1" value="1" min="0.1" max="50" step="0.1">
+                
+                <div style="margin-top: 10px;">
+                    <button class="primary" onclick="getEnsoRoute()">🛣️ Get Route Data</button>
+                    <button class="success" onclick="testEnsoExample()">🧪 Test Example</button>
+                </div>
+                
+                <div id="ensoRouteResult"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Advanced Multicall Builder Section -->
+    <div class="section">
+        <h3>🔧 Advanced Multicall Builder</h3>
+        
+        <div style="margin-bottom: 20px;">
+            <button class="success" onclick="addMulticallStep()">➕ Add Call</button>
+            <button class="primary" onclick="clearMulticallSteps()">🗑️ Clear All</button>
+            <button class="primary" onclick="loadMulticallPreset('ensoSwap')">📋 Enso Swap Template</button>
+        </div>
+        
+        <div id="multicallSteps">
+            <!-- Multicall steps will be added dynamically -->
+        </div>
+        
+        <div style="margin-top: 20px;">
+            <button class="success" onclick="buildMulticallData()">🔨 Build Multicall Data</button>
+            <button class="primary" onclick="previewMulticall()">👀 Preview</button>
+        </div>
+        
+        <div id="multicallResult"></div>
+    </div>
+
+    <!-- Multicall Step Modal -->
+    <div id="multicallModal" class="modal">
+        <div class="modal-content">
+            <h3>🔧 Add Multicall Step</h3>
+            
+            <label>Step Type:</label>
+            <select id="multicallStepType" onchange="updateMulticallStep()">
+                <option value="manual">Manual Call Data</option>
+                <option value="erc20Transfer">ERC20 Transfer</option>
+                <option value="erc20Approve">ERC20 Approve</option>
+                <option value="ensoGenerated">Enso Generated</option>
+            </select>
+            
+            <label>Target Contract:</label>
+            <input type="text" id="multicallTarget" placeholder="0x...">
+            
+            <label>ETH Value (wei):</label>
+            <input type="text" id="multicallValue" placeholder="0" value="0">
+            
+            <div id="multicallStepParams"></div>
+            
+            <div style="margin-top: 20px;">
+                <button class="success" onclick="addMulticallStepConfirm()">✅ Add Step</button>
+                <button class="danger" onclick="closeMulticallModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h3>ERC20 Token Approval</h3>
+        
+        <div style="margin-bottom: 20px;">
+            <button class="success" onclick="loadPreset('usdc')">USDC → YieldMax</button>
+            <button class="success" onclick="loadPreset('unlimited')">Unlimited Approval</button>
+            <button class="danger" onclick="loadPreset('revoke')">Revoke Approval</button>
+        </div>
+        
+        <label>Token Address:</label>
+        <input type="text" id="tokenAddress" placeholder="0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913">
+        
+        <label>Spender Address:</label>
+        <input type="text" id="spenderAddress" placeholder="0xe97978aB28f4d340494293a519B8Ba7Ab6E9640F">
+        
+        <label>Approval Type:</label>
+        <select id="approvalType" onchange="updateApprovalType()">
+            <option value="specific">Specific Amount</option>
+            <option value="unlimited">Unlimited</option>
+            <option value="revoke">Revoke (0)</option>
+        </select>
+        
+        <label>Amount:</label>
+        <input type="text" id="amount" placeholder="1000">
+        
+        <label>Decimals:</label>
+        <input type="number" id="decimals" value="6" min="0" max="18">
+        
+        <div style="margin-top: 20px;">
+            <button id="approveBtn" class="primary" onclick="executeApproval()" disabled>Execute Approval</button>
+            <button class="primary" onclick="previewTransaction()">Preview</button>
+            <button class="primary" onclick="checkAllowance()">Check Allowance</button>
+        </div>
+        
+        <div id="result"></div>
+    </div>
+
+    <script>
+        let provider, signer, userAccount;
+        
+        // CCIP Presets
+        const ccipPresets = {
+            baseToAvalanche: {
+                yieldMax: '0xe97978aB28f4d340494293a519B8Ba7Ab6E9640F',
+                destinationChain: '14767482510784806043',
+                receiver: '0x379154D8C0b0B19B773f841554f7b7Ad445cA244',
+                target: '0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E',
+                tokens: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+                amounts: '1000000'
+            },
+            avalancheToBase: {
+                yieldMax: '0x379154D8C0b0B19B773f841554f7b7Ad445cA244',
+                destinationChain: '10344971235874465080',
+                receiver: '0xe97978aB28f4d340494293a519B8Ba7Ab6E9640F',
+                target: '0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E',
+                tokens: '0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E',
+                amounts: '1000000'
+            },
+            custom: {
+                yieldMax: '',
+                destinationChain: '14767482510784806043',
+                receiver: '',
+                target: '',
+                tokens: '',
+                amounts: ''
+            }
+        };
+
+        // ERC20 Approval Presets
+        const presets = {
+            usdc: {
+                token: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+                spender: '0xe97978aB28f4d340494293a519B8Ba7Ab6E9640F',
+                amount: '1000',
+                decimals: 6,
+                type: 'specific'
+            },
+            unlimited: {
+                token: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+                spender: '0xe97978aB28f4d340494293a519B8Ba7Ab6E9640F',
+                amount: '',
+                decimals: 6,
+                type: 'unlimited'
+            },
+            revoke: {
+                token: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+                spender: '0xe97978aB28f4d340494293a519B8Ba7Ab6E9640F',
+                amount: '0',
+                decimals: 6,
+                type: 'revoke'
+            }
+        };
+
+        // Wallet Connection
+        async function connectMetaMask() {
+            try {
+                if (!window.ethereum) {
+                    throw new Error('MetaMask not found. Please install MetaMask.');
+                }
+
+                updateStatus('Connecting to MetaMask...', false);
+                provider = new ethers.providers.Web3Provider(window.ethereum);
+                
+                const accounts = await window.ethereum.request({ 
+                    method: 'eth_requestAccounts' 
+                });
+                
+                if (!accounts || accounts.length === 0) {
+                    throw new Error('No accounts found.');
+                }
+
+                signer = provider.getSigner();
+                userAccount = await signer.getAddress();
+                
+                await updateUI();
+                updateStatus('Connected via MetaMask', true);
+                showResult(`✅ Connected: ${userAccount}`, true);
+                
+            } catch (error) {
+                updateStatus('Connection failed', false);
+                showResult(`❌ Connection failed: ${error.message}`, false);
+            }
+        }
+
+        async function disconnectWallet() {
+            provider = null;
+            signer = null;
+            userAccount = null;
+            updateStatus('Not Connected', false);
+            document.getElementById('accountInfo').style.display = 'none';
+            document.getElementById('approveBtn').disabled = true;
+            document.getElementById('executeCCIPBtn').disabled = true;
+        }
+
+        async function updateUI() {
+            if (signer && userAccount) {
+                document.getElementById('approveBtn').disabled = false;
+                document.getElementById('executeCCIPBtn').disabled = false;
+                document.getElementById('disconnectBtn').disabled = false;
+                
+                const balance = await provider.getBalance(userAccount);
+                document.getElementById('balance').textContent = ethers.utils.formatEther(balance);
+                document.getElementById('account').textContent = userAccount;
+                document.getElementById('accountInfo').style.display = 'block';
+                
+                const network = await provider.getNetwork();
+                document.getElementById('network').textContent = network.name;
+                
+                // Auto-fill executor sender address and Enso from address
+                document.getElementById('executorSenderAddress').value = userAccount;
+                document.getElementById('ensoFromAddress').value = userAccount;
+            }
+        }
+
+        function updateStatus(message, connected) {
+            document.getElementById('status').textContent = message;
+            const section = document.getElementById('walletSection');
+            section.className = `section ${connected ? 'connected' : 'disconnected'}`;
+        }
+
+        // CCIP Functions
+        function loadCCIPPreset(name) {
+            const preset = ccipPresets[name];
+            if (preset) {
+                document.getElementById('yieldMaxAddress').value = preset.yieldMax;
+                document.getElementById('destinationChain').value = preset.destinationChain;
+                document.getElementById('receiverAddress').value = preset.receiver;
+                document.getElementById('targetContract').value = preset.target;
+                document.getElementById('tokenAddresses').value = preset.tokens;
+                document.getElementById('tokenAmounts').value = preset.amounts;
+                updateChainInfo();
+            }
+        }
+
+        function updateChainInfo() {
+            const chainSelector = document.getElementById('destinationChain').value;
+            const chainNames = {
+                '14767482510784806043': 'Avalanche',
+                '10344971235874465080': 'Base',
+                '5009297550715157269': 'Ethereum',
+                '4949039107694359620': 'Arbitrum'
+            };
+            console.log(`Selected chain: ${chainNames[chainSelector] || 'Unknown'}`);
+        }
+
+        function getCCIPParams() {
+            const yieldMaxAddress = document.getElementById('yieldMaxAddress').value;
+            const destinationChainSelector = document.getElementById('destinationChain').value;
+            const receiver = document.getElementById('receiverAddress').value;
+            const targetContract = document.getElementById('targetContract').value;
+            const ethValue = document.getElementById('ethValue').value || '0';
+            const additionalEth = document.getElementById('additionalEth').value || '0';
+            const gasLimit = document.getElementById('gasLimit').value || '500000';
+            
+            const tokenAddressesStr = document.getElementById('tokenAddresses').value;
+            const tokenAmountsStr = document.getElementById('tokenAmounts').value;
+            const callData = document.getElementById('callData').value || '0x';
+            
+            const tokenAddresses = tokenAddressesStr ? tokenAddressesStr.split(',').map(addr => addr.trim()) : [];
+            const tokenAmounts = tokenAmountsStr ? tokenAmountsStr.split(',').map(amt => amt.trim()) : [];
+            
+            return {
+                yieldMaxAddress,
+                destinationChainSelector,
+                receiver,
+                targetContract,
+                ethValue,
+                additionalEth,
+                gasLimit,
+                tokenAddresses,
+                tokenAmounts,
+                callData
+            };
+        }
+
+        async function estimateCCIPFee() {
+            try {
+                if (!provider) throw new Error('Wallet not connected');
+                
+                const params = getCCIPParams();
+                
+                const yieldMaxABI = [
+                    "function estimateFee(uint64 destinationChainSelector, address receiver, address targetContract, uint256 value, address[] calldata tokenAddresses, uint256[] calldata tokenAmounts, bytes calldata callData, uint256 gasLimit) external view returns (uint256)"
+                ];
+                
+                const contract = new ethers.Contract(params.yieldMaxAddress, yieldMaxABI, provider);
+                
+                const fee = await contract.estimateFee(
+                    params.destinationChainSelector,
+                    params.receiver,
+                    params.targetContract,
+                    params.ethValue,
+                    params.tokenAddresses,
+                    params.tokenAmounts,
+                    params.callData,
+                    params.gasLimit
+                );
+                
+                const additionalEthWei = ethers.utils.parseEther(params.additionalEth);
+                const totalEstimated = fee.add(additionalEthWei);
+                
+                showCCIPResult(`
+                    <strong>💰 Estimated Costs:</strong><br>
+                    CCIP Fee: ${ethers.utils.formatEther(fee)} ETH<br>
+                    Additional ETH: ${params.additionalEth} ETH<br>
+                    <strong>Total: ${ethers.utils.formatEther(totalEstimated)} ETH</strong><br>
+                    <small>CCIP Fee (raw): ${fee.toString()} wei</small>
+                `, true);
+                
+            } catch (error) {
+                showCCIPResult(`❌ Fee estimation failed: ${error.message}`, false);
+            }
+        }
+
+        async function previewCCIPTransaction() {
+            try {
+                const params = getCCIPParams();
+                
+                showCCIPResult(`
+                    <strong>📋 Cross-Chain Transaction Preview:</strong><br>
+                    <strong>From:</strong> ${params.yieldMaxAddress}<br>
+                    <strong>To Chain:</strong> ${params.destinationChainSelector}<br>
+                    <strong>Receiver:</strong> ${params.receiver}<br>
+                    <strong>Target:</strong> ${params.targetContract}<br>
+                    <strong>ETH Value:</strong> ${params.ethValue} wei<br>
+                    <strong>Additional ETH:</strong> ${params.additionalEth} ETH<br>
+                    <strong>Gas Limit:</strong> ${params.gasLimit}<br>
+                    <strong>Tokens:</strong> ${params.tokenAddresses.length} token(s)<br>
+                    <strong>Call Data:</strong> ${params.callData.substring(0, 50)}...
+                `, true);
+                
+            } catch (error) {
+                showCCIPResult(`❌ Preview failed: ${error.message}`, false);
+            }
+        }
+
+        async function executeCrossChain() {
+            try {
+                if (!signer) throw new Error('Wallet not connected');
+                
+                const params = getCCIPParams();
+                
+                const yieldMaxABI = [
+                    "function sendCrossChainExecution(uint64 destinationChainSelector, address receiver, address targetContract, uint256 value, address[] calldata tokenAddresses, uint256[] calldata tokenAmounts, bytes calldata callData, uint256 gasLimit) external payable",
+                    "function estimateFee(uint64 destinationChainSelector, address receiver, address targetContract, uint256 value, address[] calldata tokenAddresses, uint256[] calldata tokenAmounts, bytes calldata callData, uint256 gasLimit) external view returns (uint256)"
+                ];
+                
+                const contract = new ethers.Contract(params.yieldMaxAddress, yieldMaxABI, signer);
+                
+                // Estimate fee first
+                const fee = await contract.estimateFee(
+                    params.destinationChainSelector,
+                    params.receiver,
+                    params.targetContract,
+                    params.ethValue,
+                    params.tokenAddresses,
+                    params.tokenAmounts,
+                    params.callData,
+                    params.gasLimit
+                );
+                
+                showCCIPResult(`⏳ Executing cross-chain transaction...<br>Fee: ${ethers.utils.formatEther(fee)} ETH<br>Gas Limit: ${params.gasLimit}`, true);
+                
+                // Calculate total value to send (CCIP fee + additional ETH)
+                const additionalEthWei = ethers.utils.parseEther(params.additionalEth);
+                const totalValue = fee.add(additionalEthWei);
+                
+                // Execute the transaction
+                const tx = await contract.sendCrossChainExecution(
+                    params.destinationChainSelector,
+                    params.receiver,
+                    params.targetContract,
+                    params.ethValue,
+                    params.tokenAddresses,
+                    params.tokenAmounts,
+                    params.callData,
+                    params.gasLimit,
+                    { value: totalValue }
+                );
+                
+                showCCIPResult(`📤 Transaction sent: ${tx.hash}<br>Waiting for confirmation...`, true);
+                
+                const receipt = await tx.wait();
+                showCCIPResult(`
+                    ✅ <strong>Cross-Chain Execution Successful!</strong><br>
+                    Hash: ${receipt.transactionHash}<br>
+                    Block: ${receipt.blockNumber}<br>
+                    Gas Used: ${receipt.gasUsed.toString()}<br>
+                    Gas Limit Set: ${params.gasLimit}<br>
+                    CCIP Fee: ${ethers.utils.formatEther(fee)} ETH<br>
+                    Additional ETH: ${params.additionalEth} ETH<br>
+                    Total Sent: ${ethers.utils.formatEther(totalValue)} ETH
+                `, true);
+                
+            } catch (error) {
+                let msg = error.message;
+                if (error.code === 4001) msg = 'Transaction rejected by user';
+                showCCIPResult(`❌ Cross-chain execution failed: ${msg}`, false);
+            }
+        }
+
+        function showCCIPResult(message, success) {
+            const result = document.getElementById('ccipResult');
+            result.innerHTML = message;
+            result.className = `result ${success ? 'success-result' : 'error-result'}`;
+        }
+
+        // Call Data Builder Functions
+        function openCallDataBuilder() {
+            document.getElementById('callDataModal').style.display = 'block';
+            updateFunctionBuilder();
+        }
+
+        function closeCallDataBuilder() {
+            document.getElementById('callDataModal').style.display = 'none';
+        }
+
+        function updateFunctionBuilder() {
+            const functionType = document.getElementById('functionType').value;
+            const paramsDiv = document.getElementById('functionParams');
+            
+            let html = '';
+            
+            switch (functionType) {
+                case 'erc20Transfer':
+                    html = `
+                        <label>To Address:</label>
+                        <input type="text" id="transferTo" placeholder="0x1958E5D7477ed777390e7034A9CC9719632838C3">
+                        <label>Amount:</label>
+                        <input type="text" id="transferAmount" placeholder="10000">
+                    `;
+                    break;
+                case 'erc20Approve':
+                    html = `
+                        <label>Spender Address:</label>
+                        <input type="text" id="approveSpender" placeholder="0x...">
+                        <label>Amount:</label>
+                        <input type="text" id="approveAmount" placeholder="10000">
+                    `;
+                    break;
+                case 'custom':
+                    html = `
+                        <label>Function Signature:</label>
+                        <input type="text" id="customSignature" placeholder="function transfer(address,uint256)">
+                        <label>Parameters (JSON array):</label>
+                        <textarea id="customParams" rows="3" placeholder='["0x...", "1000"]'></textarea>
+                    `;
+                    break;
+            }
+            
+            paramsDiv.innerHTML = html;
+        }
+
+        function buildCallData() {
+            try {
+                const functionType = document.getElementById('functionType').value;
+                let callData = '';
+                
+                switch (functionType) {
+                    case 'erc20Transfer':
+                        const transferTo = document.getElementById('transferTo').value;
+                        const transferAmount = document.getElementById('transferAmount').value;
+                        
+                        const transferInterface = new ethers.utils.Interface([
+                            "function transfer(address to, uint256 amount)"
+                        ]);
+                        callData = transferInterface.encodeFunctionData("transfer", [transferTo, transferAmount]);
+                        break;
+                        
+                    case 'erc20Approve':
+                        const approveSpender = document.getElementById('approveSpender').value;
+                        const approveAmount = document.getElementById('approveAmount').value;
+                        
+                        const approveInterface = new ethers.utils.Interface([
+                            "function approve(address spender, uint256 amount)"
+                        ]);
+                        callData = approveInterface.encodeFunctionData("approve", [approveSpender, approveAmount]);
+                        break;
+                        
+                    case 'custom':
+                        const signature = document.getElementById('customSignature').value;
+                        const paramsStr = document.getElementById('customParams').value;
+                        const params = JSON.parse(paramsStr);
+                        
+                        const customInterface = new ethers.utils.Interface([signature]);
+                        const functionName = signature.match(/function\s+(\w+)/)[1];
+                        callData = customInterface.encodeFunctionData(functionName, params);
+                        break;
+                }
+                
+                document.getElementById('builtCallData').innerHTML = `
+                    <strong>✅ Generated Call Data:</strong><br>
+                    <textarea readonly style="width: 100%; height: 100px;">${callData}</textarea>
+                    <button onclick="useBuiltCallData('${callData}')" class="success">Use This Call Data</button>
+                `;
+                
+            } catch (error) {
+                document.getElementById('builtCallData').innerHTML = `
+                    <span style="color: red;">❌ Error: ${error.message}</span>
+                `;
+            }
+        }
+
+        function useBuiltCallData(callData) {
+            document.getElementById('callData').value = callData;
+            closeCallDataBuilder();
+            showCCIPResult('✅ Call data updated!', true);
+        }
+
+        // ERC20 Approval Functions
+        function loadPreset(name) {
+            const preset = presets[name];
+            if (preset) {
+                document.getElementById('tokenAddress').value = preset.token;
+                document.getElementById('spenderAddress').value = preset.spender;
+                document.getElementById('amount').value = preset.amount;
+                document.getElementById('decimals').value = preset.decimals;
+                document.getElementById('approvalType').value = preset.type;
+                updateApprovalType();
+            }
+        }
+
+        function updateApprovalType() {
+            const type = document.getElementById('approvalType').value;
+            const amountField = document.getElementById('amount');
+            
+            switch (type) {
+                case 'unlimited':
+                    amountField.value = 'MAX';
+                    amountField.disabled = true;
+                    break;
+                case 'revoke':
+                    amountField.value = '0';
+                    amountField.disabled = true;
+                    break;
+                default:
+                    amountField.disabled = false;
+                    if (amountField.value === 'MAX' || amountField.value === '0') {
+                        amountField.value = '1000';
+                    }
+            }
+        }
+
+        function getApprovalParams() {
+            const tokenAddress = document.getElementById('tokenAddress').value;
+            const spenderAddress = document.getElementById('spenderAddress').value;
+            const type = document.getElementById('approvalType').value;
+            const decimals = parseInt(document.getElementById('decimals').value);
+            
+            let amount;
+            switch (type) {
+                case 'unlimited':
+                    amount = ethers.constants.MaxUint256;
+                    break;
+                case 'revoke':
+                    amount = ethers.BigNumber.from(0);
+                    break;
+                default:
+                    const amountStr = document.getElementById('amount').value;
+                    amount = ethers.utils.parseUnits(amountStr, decimals);
+            }
+
+            return { tokenAddress, spenderAddress, amount };
+        }
+
+        async function previewTransaction() {
+            try {
+                if (!signer) throw new Error('Wallet not connected');
+                
+                const { tokenAddress, spenderAddress, amount } = getApprovalParams();
+                
+                const contract = new ethers.Contract(
+                    tokenAddress,
+                    ['function approve(address,uint256) returns (bool)'],
+                    signer
+                );
+
+                const gas = await contract.estimateGas.approve(spenderAddress, amount);
+                const gasPrice = await provider.getGasPrice();
+                const cost = gas.mul(gasPrice);
+
+                showResult(`
+                    <strong>📋 Transaction Preview:</strong><br>
+                    Token: ${tokenAddress}<br>
+                    Spender: ${spenderAddress}<br>
+                    Amount: ${amount.toString()}<br>
+                    Est. Gas: ${gas.toString()}<br>
+                    Est. Cost: ${ethers.utils.formatEther(cost)} ETH
+                `, true);
+            } catch (error) {
+                showResult(`❌ Preview failed: ${error.message}`, false);
+            }
+        }
+
+        async function checkAllowance() {
+            try {
+                if (!provider || !userAccount) throw new Error('Wallet not connected');
+                
+                const tokenAddress = document.getElementById('tokenAddress').value;
+                const spenderAddress = document.getElementById('spenderAddress').value;
+                const decimals = parseInt(document.getElementById('decimals').value);
+                
+                const contract = new ethers.Contract(
+                    tokenAddress,
+                    ['function allowance(address,address) view returns (uint256)'],
+                    provider
+                );
+
+                const allowance = await contract.allowance(userAccount, spenderAddress);
+                const formatted = ethers.utils.formatUnits(allowance, decimals);
+
+                showResult(`
+                    <strong>🔍 Current Allowance:</strong><br>
+                    Raw: ${allowance.toString()}<br>
+                    Formatted: ${formatted} tokens
+                `, true);
+            } catch (error) {
+                showResult(`❌ Check failed: ${error.message}`, false);
+            }
+        }
+
+        async function executeApproval() {
+            try {
+                if (!signer) throw new Error('Wallet not connected');
+                
+                const { tokenAddress, spenderAddress, amount } = getApprovalParams();
+                
+                const contract = new ethers.Contract(
+                    tokenAddress,
+                    ['function approve(address,uint256) returns (bool)'],
+                    signer
+                );
+
+                showResult('⏳ Waiting for approval...', true);
+                
+                const tx = await contract.approve(spenderAddress, amount);
+                showResult(`📤 Transaction sent: ${tx.hash}<br>Waiting for confirmation...`, true);
+                
+                const receipt = await tx.wait();
+                showResult(`
+                    ✅ <strong>Approval Successful!</strong><br>
+                    Hash: ${receipt.transactionHash}<br>
+                    Block: ${receipt.blockNumber}<br>
+                    Gas Used: ${receipt.gasUsed.toString()}
+                `, true);
+                
+            } catch (error) {
+                let msg = error.message;
+                if (error.code === 4001) msg = 'Transaction rejected by user';
+                showResult(`❌ Approval failed: ${msg}`, false);
+            }
+        }
+
+        function showResult(message, success) {
+            const result = document.getElementById('result');
+            result.innerHTML = message;
+            result.className = `result ${success ? 'success-result' : 'error-result'}`;
+        }
+
+        // Gas Limit Guide Function
+        function showGasLimitGuide() {
+            showCCIPResult(`
+                <strong>⛽ Gas Limit Guide</strong><br><br>
+                <strong>📊 Recommended Gas Limits:</strong><br>
+                • Simple ERC20 Transfer: <strong>50,000 - 100,000</strong><br>
+                • ERC20 Approve: <strong>50,000 - 80,000</strong><br>
+                • Simple Contract Call: <strong>100,000 - 200,000</strong><br>
+                • Complex DeFi Operations: <strong>500,000 - 1,000,000</strong><br>
+                • Multi-step Operations: <strong>1,000,000 - 2,000,000</strong><br><br>
+                
+                <strong>💰 Cost Impact:</strong><br>
+                Higher gas limits = Higher CCIP fees<br>
+                Lower gas limits = Risk of execution failure<br><br>
+                
+                <strong>🎯 Optimization Tips:</strong><br>
+                • Start with conservative estimates<br>
+                • Test with smaller amounts first<br>
+                • Monitor actual gas usage<br>
+                • Adjust based on complexity<br><br>
+                
+                <strong>⚠️ Limits:</strong><br>
+                • Minimum: 21,000 (basic transaction)<br>
+                • Maximum: 5,000,000 (safety limit)<br>
+                • Default: 500,000 (good for most operations)
+            `, true);
+        }
+
+        // ================================
+        // EXECUTOR ADDRESS PREDICTION FUNCTIONS
+        // ================================
+
+        const executorPresets = {
+            base: {
+                address: '0xe97978aB28f4d340494293a519B8Ba7Ab6E9640F',
+                name: 'Base YieldMax'
+            },
+            avalanche: {
+                address: '0x379154D8C0b0B19B773f841554f7b7Ad445cA244',
+                name: 'Avalanche YieldMax'
+            },
+            custom: {
+                address: '',
+                name: 'Custom Contract'
+            }
+        };
+
+        function loadExecutorPreset(preset) {
+            const config = executorPresets[preset];
+            if (config) {
+                document.getElementById('executorYieldMaxAddress').value = config.address;
+                if (userAccount) {
+                    document.getElementById('executorSenderAddress').value = userAccount;
+                }
+                showExecutorResult(`✅ Loaded ${config.name} preset`, true);
+            }
+        }
+
+        async function predictExecutorAddress() {
+            try {
+                if (!provider) throw new Error('Wallet not connected');
+                
+                const yieldMaxAddress = document.getElementById('executorYieldMaxAddress').value;
+                const senderAddress = document.getElementById('executorSenderAddress').value || userAccount;
+                
+                if (!yieldMaxAddress || !senderAddress) {
+                    throw new Error('Please provide both YieldMax contract address and sender address');
+                }
+                
+                const yieldMaxABI = [
+                    "function predictExecutorAddress(address sender) external view returns (address)"
+                ];
+                
+                const contract = new ethers.Contract(yieldMaxAddress, yieldMaxABI, provider);
+                const predictedAddress = await contract.predictExecutorAddress(senderAddress);
+                
+                showExecutorResult(`
+                    <strong>🔮 Predicted Executor Address:</strong><br>
+                    <textarea readonly style="width: 100%; height: 60px;">${predictedAddress}</textarea><br>
+                    <strong>For Sender:</strong> ${senderAddress}<br>
+                    <strong>YieldMax Contract:</strong> ${yieldMaxAddress}<br>
+                    <button onclick="copyToClipboard('${predictedAddress}')" class="primary">📋 Copy Address</button>
+                `, true);
+                
+            } catch (error) {
+                showExecutorResult(`❌ Prediction failed: ${error.message}`, false);
+            }
+        }
+
+        async function checkExecutorExists() {
+            try {
+                if (!provider) throw new Error('Wallet not connected');
+                
+                const yieldMaxAddress = document.getElementById('executorYieldMaxAddress').value;
+                const senderAddress = document.getElementById('executorSenderAddress').value || userAccount;
+                
+                if (!yieldMaxAddress || !senderAddress) {
+                    throw new Error('Please provide both YieldMax contract address and sender address');
+                }
+                
+                // First predict the address
+                const yieldMaxABI = [
+                    "function predictExecutorAddress(address sender) external view returns (address)"
+                ];
+                
+                const contract = new ethers.Contract(yieldMaxAddress, yieldMaxABI, provider);
+                const predictedAddress = await contract.predictExecutorAddress(senderAddress);
+                
+                // Check if contract exists at that address
+                const code = await provider.getCode(predictedAddress);
+                const exists = code !== '0x';
+                
+                showExecutorResult(`
+                    <strong>🔍 Executor Status:</strong><br>
+                    <strong>Address:</strong> ${predictedAddress}<br>
+                    <strong>Exists:</strong> ${exists ? '✅ Yes - Already deployed' : '❌ No - Will be created on first use'}<br>
+                    <strong>Code Size:</strong> ${code.length - 2} bytes<br>
+                    <button onclick="copyToClipboard('${predictedAddress}')" class="primary">📋 Copy Address</button>
+                `, true);
+                
+            } catch (error) {
+                showExecutorResult(`❌ Check failed: ${error.message}`, false);
+            }
+        }
+
+        function showExecutorResult(message, success) {
+            const result = document.getElementById('executorResult');
+            result.innerHTML = message;
+            result.className = `result ${success ? 'success-result' : 'error-result'}`;
+        }
+
+        // ================================
+        // ENSO INTEGRATION FUNCTIONS
+        // ================================
+
+        // Enso presets for common operations
+        const ensoPresets = {
+            ethToUsdc: {
+                fromToken: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', // ETH
+                toToken: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', // USDC on Base
+                amountIn: '1000000000000000', // 0.001 ETH
+                chainId: '8453', // Base
+                slippage: '1'
+            },
+            usdcToWeth: {
+                fromToken: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', // USDC on Base
+                toToken: '0x4200000000000000000000000000000000000006', // WETH on Base
+                amountIn: '1000000', // 1 USDC
+                chainId: '8453', // Base
+                slippage: '1'
+            },
+            aaveDeposit: {
+                fromToken: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', // ETH
+                toToken: '0xd4a0e0b9149bcee3c920d2e00b5de09138fd8bb7', // aEthUSDC
+                amountIn: '1000000000000000', // 0.001 ETH
+                chainId: '8453', // Base
+                slippage: '3'
+            },
+            custom: {
+                fromToken: '',
+                toToken: '',
+                amountIn: '',
+                chainId: '8453',
+                slippage: '1'
+            }
+        };
+
+        function loadEnsoPreset(preset) {
+            const config = ensoPresets[preset];
+            if (!config) return;
+            
+            document.getElementById('ensoFromToken').value = config.fromToken;
+            document.getElementById('ensoToToken').value = config.toToken;
+            document.getElementById('ensoAmountIn').value = config.amountIn;
+            document.getElementById('ensoChainId').value = config.chainId;
+            document.getElementById('ensoSlippage').value = config.slippage;
+            
+            // Auto-fill addresses if wallet is connected
+            if (userAccount) {
+                document.getElementById('ensoFromAddress').value = userAccount;
+                document.getElementById('ensoToAddress').value = userAccount;
+            }
+            
+            showEnsoRouteResult(`✅ Loaded ${preset} preset`, true);
+        }
+
+        async function testEnsoExample() {
+            try {
+                showEnsoRouteResult('⏳ Testing with your example URL...', true);
+                
+                // Use the exact URL from your example
+                const exampleUrl = 'https://api.enso.finance/api/v1/shortcuts/route?chainId=8453&fromAddress=0x1958e5d7477ed777390e7034a9cc9719632838c3&routingStrategy=router&tokenIn[]=0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee&tokenOut[]=0xd4a0e0b9149bcee3c920d2e00b5de09138fd8bb7&amountIn[]=1000000000000000&slippage=300&receiver=0x1958e5d7477ed777390e7034a9cc9719632838c3&spender=0x1958e5d7477ed777390e7034a9cc9719632838c3';
+                
+                console.log('🧪 Testing Enso API with example URL:', exampleUrl);
+                
+                const response = await fetch(exampleUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                console.log('📊 Example API Response:', data);
+                
+                // Extract transaction data from response
+                const txData = data.tx || {};
+                const routeInfo = data.route || [];
+                const priceImpact = data.priceImpact || 0;
+                const gasEstimate = data.gas || 'N/A';
+                const amountOut = data.amountOut || 'N/A';
+                
+                // Format route information
+                let routeDescription = '';
+                if (routeInfo.length > 0) {
+                    routeDescription = routeInfo.map(step => 
+                        `${step.action} via ${step.protocol}`
+                    ).join(' → ');
+                }
+                
+                showEnsoRouteResult(`
+                    <strong>🧪 Test Results (Example API Call):</strong><br>
+                    <strong>Status:</strong> ✅ Success<br>
+                    <strong>Route:</strong> ${routeDescription || 'Direct swap'}<br>
+                    <strong>To:</strong> ${txData.to || 'N/A'}<br>
+                    <strong>From:</strong> ${txData.from || 'N/A'}<br>
+                    <strong>Value:</strong> ${txData.value || '0'} wei<br>
+                    <strong>Expected Out:</strong> ${amountOut}<br>
+                    <strong>Price Impact:</strong> ${(priceImpact / 100).toFixed(2)}%<br>
+                    <strong>Gas Estimate:</strong> ${gasEstimate}<br>
+                    <strong>Data Length:</strong> ${(txData.data || '').length} characters<br>
+                    <strong>Data Preview:</strong><br>
+                    <textarea readonly style="width: 100%; height: 100px;">${(txData.data || '').substring(0, 200)}${(txData.data || '').length > 200 ? '...' : ''}</textarea><br>
+                    <div style="margin-top: 10px; padding: 10px; background: #e8f5e8; border-radius: 5px;">
+                        <strong>✅ API is working!</strong> You can now use the form above with your own parameters.
+                    </div>
+                    <div style="margin-top: 10px;">
+                        <button onclick="copyToClipboard('${txData.data || ''}')" class="primary">📋 Copy Full Data</button>
+                        <button onclick="useEnsoDataForCCIP('${txData.to || ''}', '${txData.data || ''}', '${txData.value || '0'}')" class="success">🚀 Use for CCIP</button>
+                    </div>
+                `, true);
+                
+                // Auto-fill form with example data
+                document.getElementById('ensoFromToken').value = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
+                document.getElementById('ensoToToken').value = '0xd4a0e0b9149bcee3c920d2e00b5de09138fd8bb7';
+                document.getElementById('ensoAmountIn').value = '1000000000000000';
+                document.getElementById('ensoFromAddress').value = '0x1958e5d7477ed777390e7034a9cc9719632838c3';
+                document.getElementById('ensoToAddress').value = '0x1958e5d7477ed777390e7034a9cc9719632838c3';
+                document.getElementById('ensoChainId').value = '8453';
+                document.getElementById('ensoSlippage').value = '3';
+                
+            } catch (error) {
+                console.error('❌ Example API Test Failed:', error);
+                
+                showEnsoRouteResult(`
+                    <strong>❌ Example Test Failed:</strong><br>
+                    <em>Error: ${error.message}</em><br><br>
+                    <strong>📝 This could be due to:</strong><br>
+                    • CORS restrictions (try from a server, not file://)<br>
+                    • Network connectivity issues<br>
+                    • API rate limiting<br>
+                    • API key requirements<br><br>
+                    <strong>💡 Try the manual form above instead</strong>
+                `, false);
+            }
+        }
+
+        async function testEnsoApprovalExample() {
+            try {
+                showEnsoApprovalResult('⏳ Testing with your approval example...', true);
+                
+                // Use the exact URL from your example
+                const exampleUrl = 'https://api.enso.finance/api/v1/wallet/approve?chainId=43114&tokenAddress=0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E&amount=100000000&fromAddress=0x1958E5D7477ed777390e7034A9CC9719632838C3&routingStrategy=router';
+                
+                console.log('🧪 Testing Enso Approval API with example URL:', exampleUrl);
+                
+                const response = await fetch(exampleUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                console.log('📋 Example Approval Response:', data);
+                
+                // Extract transaction data from response
+                const txData = data.tx || data;
+                const gasEstimate = data.gas || data.gasLimit || 'N/A';
+                
+                showEnsoApprovalResult(`
+                    <strong>🧪 Approval Test Results (Example API Call):</strong><br>
+                    <strong>Status:</strong> ✅ Success<br>
+                    <strong>Chain:</strong> Avalanche (43114)<br>
+                    <strong>Token:</strong> 0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E<br>
+                    <strong>Amount:</strong> 100000000 (100M units)<br>
+                    <strong>To:</strong> ${txData.to || '0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E'}<br>
+                    <strong>From:</strong> ${txData.from || '0x1958E5D7477ed777390e7034A9CC9719632838C3'}<br>
+                    <strong>Value:</strong> ${txData.value || '0'} wei<br>
+                    <strong>Gas Estimate:</strong> ${gasEstimate}<br>
+                    <strong>Data Length:</strong> ${(txData.data || '').length} characters<br>
+                    <strong>Data:</strong><br>
+                    <textarea readonly style="width: 100%; height: 100px;">${txData.data || 'No data returned'}</textarea><br>
+                    <div style="margin-top: 10px; padding: 10px; background: #e8f5e8; border-radius: 5px;">
+                        <strong>✅ Approval API is working!</strong> You can now use the form above with your own parameters.
+                    </div>
+                    <div style="margin-top: 10px;">
+                        <button onclick="copyToClipboard('${txData.data || ''}')" class="primary">📋 Copy Data</button>
+                        <button onclick="useEnsoDataForCCIP('${txData.to || '0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E'}', '${txData.data || ''}', '${txData.value || '0'}')" class="success">🚀 Use for CCIP</button>
+                    </div>
+                `, true);
+                
+                // Auto-fill form with example data
+                document.getElementById('ensoTokenAddress').value = '0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E';
+                document.getElementById('ensoAmount').value = '100000000';
+                document.getElementById('ensoFromAddress').value = '0x1958E5D7477ed777390e7034A9CC9719632838C3';
+                document.getElementById('ensoChainId').value = '43114';
+                
+            } catch (error) {
+                console.error('❌ Example Approval Test Failed:', error);
+                
+                showEnsoApprovalResult(`
+                    <strong>❌ Approval Example Test Failed:</strong><br>
+                    <em>Error: ${error.message}</em><br><br>
+                    <strong>📝 This could be due to:</strong><br>
+                    • CORS restrictions (try from a server, not file://)<br>
+                    • Network connectivity issues<br>
+                    • API rate limiting<br>
+                    • Token not supported on this chain<br><br>
+                    <strong>💡 Try the manual form above instead</strong>
+                `, false);
+            }
+        }
+
+        async function getEnsoApproval() {
+            try {
+                const tokenAddress = document.getElementById('ensoTokenAddress').value;
+                const amount = document.getElementById('ensoAmount').value;
+                const chainId = document.getElementById('ensoChainId').value;
+                const fromAddress = document.getElementById('ensoFromAddress').value || userAccount;
+                
+                if (!tokenAddress || !amount || !fromAddress) {
+                    throw new Error('Please fill in token address, amount, and from address');
+                }
+                
+                showEnsoApprovalResult('⏳ Calling Enso API for approval data...', true);
+                
+                // Build the Enso approval API URL with proper query parameters
+                const ensoApiUrl = new URL('https://api.enso.finance/api/v1/wallet/approve');
+                ensoApiUrl.searchParams.append('chainId', chainId);
+                ensoApiUrl.searchParams.append('tokenAddress', tokenAddress);
+                ensoApiUrl.searchParams.append('amount', amount);
+                ensoApiUrl.searchParams.append('fromAddress', fromAddress);
+                ensoApiUrl.searchParams.append('routingStrategy', 'router');
+                
+                console.log('📋 Enso Approval API URL:', ensoApiUrl.toString());
+                
+                const response = await fetch(ensoApiUrl.toString(), {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json'
+                        // Note: Add your Enso API key here if required
+                        // 'Authorization': 'Bearer YOUR_ENSO_API_KEY'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Enso API error: ${response.status} ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                console.log('📋 Enso Approval Response:', data);
+                
+                // Extract transaction data from response
+                const txData = data.tx || data;
+                const gasEstimate = data.gas || data.gasLimit || 'N/A';
+                
+                showEnsoApprovalResult(`
+                    <strong>📋 Enso Approval Data:</strong><br>
+                    <strong>To:</strong> ${txData.to || tokenAddress}<br>
+                    <strong>From:</strong> ${txData.from || fromAddress}<br>
+                    <strong>Value:</strong> ${txData.value || '0'} wei<br>
+                    <strong>Gas Estimate:</strong> ${gasEstimate}<br>
+                    <strong>Data:</strong><br>
+                    <textarea readonly style="width: 100%; height: 100px;">${txData.data || 'No data returned'}</textarea><br>
+                    <div style="margin-top: 10px;">
+                        <button onclick="copyToClipboard('${txData.data || ''}')" class="primary">📋 Copy Data</button>
+                        <button onclick="useEnsoDataForCCIP('${txData.to || tokenAddress}', '${txData.data || ''}', '${txData.value || '0'}')" class="success">🚀 Use for CCIP</button>
+                        <button onclick="testEnsoApprovalExample()" class="success">🧪 Test Example</button>
+                    </div>
+                `, true);
+                
+            } catch (error) {
+                console.error('❌ Enso Approval API Error:', error);
+                
+                showEnsoApprovalResult(`
+                    <strong>⚠️ API Call Failed:</strong><br>
+                    <em>Error: ${error.message}</em><br><br>
+                    <strong>💡 Example URL Format:</strong><br>
+                    <code style="word-break: break-all; background: #f5f5f5; padding: 5px; display: block; margin: 10px 0;">
+                        https://api.enso.finance/api/v1/wallet/approve?chainId=${chainId}&tokenAddress=${tokenAddress}&amount=${amount}&fromAddress=${fromAddress || userAccount}&routingStrategy=router
+                    </code><br>
+                    <strong>🛠️ Troubleshooting:</strong><br>
+                    • Check if token address is valid<br>
+                    • Verify the chain ID is correct<br>
+                    • Ensure amount is in correct format<br>
+                    • Check if Enso supports this chain<br>
+                    <button onclick="testEnsoApprovalExample()" class="primary">🧪 Test with Example</button>
+                `, false);
+            }
+        }
+
+        async function getEnsoRoute() {
+            try {
+                const fromToken = document.getElementById('ensoFromToken').value;
+                const toToken = document.getElementById('ensoToToken').value;
+                const amountIn = document.getElementById('ensoAmountIn').value;
+                const fromAddress = document.getElementById('ensoFromAddress').value || userAccount;
+                const toAddress = document.getElementById('ensoToAddress').value || fromAddress;
+                const slippage = document.getElementById('ensoSlippage').value;
+                const chainId = document.getElementById('ensoChainId').value;
+                
+                if (!fromToken || !toToken || !amountIn || !fromAddress) {
+                    throw new Error('Please fill in all required fields');
+                }
+                
+                showEnsoRouteResult('⏳ Calling Enso API for route data...', true);
+                
+                // Build the Enso API URL with proper query parameters
+                const ensoApiUrl = new URL('https://api.enso.finance/api/v1/shortcuts/route');
+                ensoApiUrl.searchParams.append('chainId', chainId);
+                ensoApiUrl.searchParams.append('fromAddress', fromAddress);
+                ensoApiUrl.searchParams.append('routingStrategy', 'router');
+                ensoApiUrl.searchParams.append('tokenIn[]', fromToken);
+                ensoApiUrl.searchParams.append('tokenOut[]', toToken);
+                ensoApiUrl.searchParams.append('amountIn[]', amountIn);
+                ensoApiUrl.searchParams.append('slippage', Math.floor(parseFloat(slippage) * 100)); // Convert to basis points
+                ensoApiUrl.searchParams.append('receiver', toAddress);
+                ensoApiUrl.searchParams.append('spender', fromAddress);
+                
+                console.log('🔗 Enso API URL:', ensoApiUrl.toString());
+                
+                const response = await fetch(ensoApiUrl.toString(), {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                        // Note: Add your Enso API key here if required
+                        // 'Authorization': 'Bearer YOUR_ENSO_API_KEY'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Enso API error: ${response.status} ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                console.log('📊 Enso API Response:', data);
+                
+                // Extract transaction data from response
+                const txData = data.tx || {};
+                const routeInfo = data.route || [];
+                const priceImpact = data.priceImpact || 0;
+                const gasEstimate = data.gas || 'N/A';
+                const amountOut = data.amountOut || 'N/A';
+                
+                // Format route information
+                let routeDescription = '';
+                if (routeInfo.length > 0) {
+                    routeDescription = routeInfo.map(step => 
+                        `${step.action} via ${step.protocol}`
+                    ).join(' → ');
+                }
+                
+                showEnsoRouteResult(`
+                    <strong>🛣️ Enso Route Data:</strong><br>
+                    <strong>Route:</strong> ${routeDescription || 'Direct swap'}<br>
+                    <strong>To:</strong> ${txData.to || 'N/A'}<br>
+                    <strong>From:</strong> ${txData.from || 'N/A'}<br>
+                    <strong>Value:</strong> ${txData.value || '0'} wei<br>
+                    <strong>Expected Out:</strong> ${amountOut}<br>
+                    <strong>Price Impact:</strong> ${(priceImpact / 100).toFixed(2)}%<br>
+                    <strong>Gas Estimate:</strong> ${gasEstimate}<br>
+                    <strong>Data:</strong><br>
+                    <textarea readonly style="width: 100%; height: 120px;">${txData.data || 'No data returned'}</textarea><br>
+                    <div style="margin-top: 10px;">
+                        <button onclick="copyToClipboard('${txData.data || ''}')" class="primary">📋 Copy Data</button>
+                        <button onclick="useEnsoDataForCCIP('${txData.to || ''}', '${txData.data || ''}', '${txData.value || '0'}')" class="success">🚀 Use for CCIP</button>
+                        <button onclick="showEnsoRouteDetails('${JSON.stringify(data).replace(/'/g, "\\'")}', '${routeDescription}')" class="primary">📊 Route Details</button>
+                    </div>
+                `, true);
+                
+            } catch (error) {
+                console.error('❌ Enso API Error:', error);
+                
+                // Show example data when API call fails (for demo purposes)
+                showEnsoRouteResult(`
+                    <strong>⚠️ API Call Failed:</strong><br>
+                    <em>Error: ${error.message}</em><br><br>
+                    <strong>💡 Example URL Format:</strong><br>
+                    <code style="word-break: break-all; background: #f5f5f5; padding: 5px; display: block; margin: 10px 0;">
+                        https://api.enso.finance/api/v1/shortcuts/route?chainId=${document.getElementById('ensoChainId').value}&fromAddress=${document.getElementById('ensoFromAddress').value || userAccount}&routingStrategy=router&tokenIn[]=${document.getElementById('ensoFromToken').value}&tokenOut[]=${document.getElementById('ensoToToken').value}&amountIn[]=${document.getElementById('ensoAmountIn').value}&slippage=${Math.floor(parseFloat(document.getElementById('ensoSlippage').value) * 100)}&receiver=${document.getElementById('ensoToAddress').value || document.getElementById('ensoFromAddress').value || userAccount}&spender=${document.getElementById('ensoFromAddress').value || userAccount}
+                    </code><br>
+                    <strong>🛠️ Troubleshooting:</strong><br>
+                    • Check if all token addresses are valid<br>
+                    • Ensure sufficient balance for the swap<br>
+                    • Verify the chain ID is correct<br>
+                    • Check if Enso supports this token pair<br>
+                    <button onclick="copyToClipboard('${document.getElementById('ensoFromToken').value || ''}')" class="primary">📋 Copy From Token</button>
+                    <button onclick="copyToClipboard('${document.getElementById('ensoToToken').value || ''}')" class="primary">📋 Copy To Token</button>
+                `, false);
+            }
+        }
+
+        function useEnsoDataForCCIP(target, data, value = '0') {
+            // Auto-fill the CCIP form with Enso data
+            document.getElementById('targetContract').value = target;
+            document.getElementById('callData').value = data;
+            document.getElementById('ethValue').value = value;
+            
+            // Scroll to CCIP section
+            document.querySelector('.ccip-section').scrollIntoView({ behavior: 'smooth' });
+            
+            showCCIPResult('✅ Enso data loaded into CCIP form!', true);
+        }
+
+        function showEnsoApprovalResult(message, success) {
+            const result = document.getElementById('ensoApprovalResult');
+            result.innerHTML = message;
+            result.className = `result ${success ? 'success-result' : 'error-result'}`;
+        }
+
+        function showEnsoRouteResult(message, success) {
+            const result = document.getElementById('ensoRouteResult');
+            result.innerHTML = message;
+            result.className = `result ${success ? 'success-result' : 'error-result'}`;
+        }
+
+        function showEnsoRouteDetails(dataJson, routeDescription) {
+            try {
+                const data = JSON.parse(dataJson);
+                const routeInfo = data.route || [];
+                
+                let detailsHtml = `
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin-top: 10px;">
+                        <h4>📊 Route Details</h4>
+                        <strong>Route Path:</strong> ${routeDescription}<br>
+                        <strong>Price Impact:</strong> ${((data.priceImpact || 0) / 100).toFixed(2)}%<br>
+                        <strong>Gas Estimate:</strong> ${data.gas || 'N/A'}<br>
+                        <strong>Created At:</strong> ${data.createdAt || 'N/A'}<br><br>
+                `;
+                
+                if (routeInfo.length > 0) {
+                    detailsHtml += '<strong>Step-by-step:</strong><br>';
+                    routeInfo.forEach((step, index) => {
+                        detailsHtml += `${index + 1}. ${step.action} via ${step.protocol}<br>`;
+                        if (step.primary) {
+                            detailsHtml += `   Primary: ${step.primary}<br>`;
+                        }
+                        if (step.tokenIn) {
+                            detailsHtml += `   Input: ${step.tokenIn.join(', ')}<br>`;
+                        }
+                        if (step.tokenOut) {
+                            detailsHtml += `   Output: ${step.tokenOut.join(', ')}<br>`;
+                        }
+                    });
+                }
+                
+                detailsHtml += '</div>';
+                
+                showEnsoRouteResult(detailsHtml, true);
+            } catch (error) {
+                console.error('Error showing route details:', error);
+                showEnsoRouteResult('❌ Error displaying route details', false);
+            }
+        }
+
+        // ================================
+        // ADVANCED MULTICALL BUILDER FUNCTIONS
+        // ================================
+
+        let multicallSteps = [];
+
+        function addMulticallStep() {
+            document.getElementById('multicallModal').style.display = 'block';
+            updateMulticallStep();
+        }
+
+        function closeMulticallModal() {
+            document.getElementById('multicallModal').style.display = 'none';
+        }
+
+        function updateMulticallStep() {
+            const stepType = document.getElementById('multicallStepType').value;
+            const paramsDiv = document.getElementById('multicallStepParams');
+            
+            let html = '';
+            
+            switch (stepType) {
+                case 'manual':
+                    html = `
+                        <label>Call Data (hex):</label>
+                        <textarea id="manualCallData" rows="4" placeholder="0x..."></textarea>
+                        <small>Enter the complete call data in hex format</small>
+                    `;
+                    break;
+                case 'erc20Transfer':
+                    html = `
+                        <label>To Address:</label>
+                        <input type="text" id="transferTo" placeholder="0x...">
+                        <label>Amount:</label>
+                        <input type="text" id="transferAmount" placeholder="1000000">
+                    `;
+                    break;
+                case 'erc20Approve':
+                    html = `
+                        <label>Spender Address:</label>
+                        <input type="text" id="approveSpender" placeholder="0x...">
+                        <label>Amount:</label>
+                        <input type="text" id="approveAmount" placeholder="1000000">
+                    `;
+                    break;
+                case 'ensoGenerated':
+                    html = `
+                        <label>Enso Call Data (paste from Enso API):</label>
+                        <textarea id="ensoCallData" rows="4" placeholder="0x..."></textarea>
+                        <small>Paste the call data you received from Enso API</small>
+                    `;
+                    break;
+            }
+            
+            paramsDiv.innerHTML = html;
+        }
+
+        function addMulticallStepConfirm() {
+            try {
+                const stepType = document.getElementById('multicallStepType').value;
+                const target = document.getElementById('multicallTarget').value;
+                const value = document.getElementById('multicallValue').value || '0';
+                
+                if (!target) {
+                    throw new Error('Target contract address is required');
+                }
+                
+                let callData = '';
+                let description = '';
+                
+                switch (stepType) {
+                    case 'manual':
+                        callData = document.getElementById('manualCallData').value;
+                        description = 'Manual Call';
+                        break;
+                    case 'erc20Transfer':
+                        const transferTo = document.getElementById('transferTo').value;
+                        const transferAmount = document.getElementById('transferAmount').value;
+                        const transferInterface = new ethers.utils.Interface([
+                            "function transfer(address to, uint256 amount)"
+                        ]);
+                        callData = transferInterface.encodeFunctionData("transfer", [transferTo, transferAmount]);
+                        description = `Transfer ${transferAmount} to ${transferTo}`;
+                        break;
+                    case 'erc20Approve':
+                        const approveSpender = document.getElementById('approveSpender').value;
+                        const approveAmount = document.getElementById('approveAmount').value;
+                        const approveInterface = new ethers.utils.Interface([
+                            "function approve(address spender, uint256 amount)"
+                        ]);
+                        callData = approveInterface.encodeFunctionData("approve", [approveSpender, approveAmount]);
+                        description = `Approve ${approveAmount} to ${approveSpender}`;
+                        break;
+                    case 'ensoGenerated':
+                        callData = document.getElementById('ensoCallData').value;
+                        description = 'Enso Generated Call';
+                        break;
+                }
+                
+                if (!callData) {
+                    throw new Error('Call data is required');
+                }
+                
+                const step = {
+                    target,
+                    value,
+                    callData,
+                    description,
+                    stepType
+                };
+                
+                multicallSteps.push(step);
+                updateMulticallDisplay();
+                closeMulticallModal();
+                
+            } catch (error) {
+                alert(`Error adding step: ${error.message}`);
+            }
+        }
+
+        function updateMulticallDisplay() {
+            const container = document.getElementById('multicallSteps');
+            
+            if (multicallSteps.length === 0) {
+                container.innerHTML = '<p style="color: #666; font-style: italic;">No steps added yet. Click "Add Call" to begin.</p>';
+                return;
+            }
+            
+            let html = '<div style="margin-bottom: 15px;"><strong>📋 Multicall Steps:</strong></div>';
+            
+            multicallSteps.forEach((step, index) => {
+                html += `
+                    <div style="border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 5px; background: #f9f9f9;">
+                        <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 10px;">
+                            <strong>Step ${index + 1}: ${step.description}</strong>
+                            <button onclick="removeMulticallStep(${index})" class="danger" style="margin-left: auto; padding: 5px 10px;">🗑️ Remove</button>
+                        </div>
+                        <div><strong>Target:</strong> ${step.target}</div>
+                        <div><strong>Value:</strong> ${step.value} wei</div>
+                        <div><strong>Data:</strong> <code style="word-break: break-all;">${step.callData.substring(0, 100)}${step.callData.length > 100 ? '...' : ''}</code></div>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+
+        function removeMulticallStep(index) {
+            multicallSteps.splice(index, 1);
+            updateMulticallDisplay();
+        }
+
+        function clearMulticallSteps() {
+            multicallSteps = [];
+            updateMulticallDisplay();
+            showMulticallResult('🗑️ All steps cleared', true);
+        }
+
+        function loadMulticallPreset(preset) {
+            if (preset === 'ensoSwap') {
+                // Clear existing steps
+                multicallSteps = [];
+                
+                // Add example steps for a typical Enso swap
+                multicallSteps.push({
+                    target: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', // USDC
+                    value: '0',
+                    callData: '0x095ea7b3000000000000000000000000080eba3855878739f4710233a8a19d89bdd2ffb8e0000000000000000000000000000000000000000000000000000000000989680',
+                    description: 'Approve USDC to Enso Router',
+                    stepType: 'erc20Approve'
+                });
+                
+                multicallSteps.push({
+                    target: '0x80EbA3855878739F4710233A8a19d89Bdd2ffB8E', // Enso Router
+                    value: '0',
+                    callData: '0x123456789abcdef...', // Placeholder for Enso route data
+                    description: 'Execute Enso Swap',
+                    stepType: 'ensoGenerated'
+                });
+                
+                updateMulticallDisplay();
+                showMulticallResult('📋 Loaded Enso swap template', true);
+            }
+        }
+
+        function buildMulticallData() {
+            try {
+                if (multicallSteps.length === 0) {
+                    throw new Error('No steps added. Please add at least one call.');
+                }
+                
+                // Build Multicall3 compatible call data
+                const multicall3Interface = new ethers.utils.Interface([
+                    "function aggregate3(tuple(address target, bool allowFailure, bytes callData)[] calls) returns (tuple(bool success, bytes returnData)[] returnData)"
+                ]);
+                
+                const calls = multicallSteps.map(step => ({
+                    target: step.target,
+                    allowFailure: false, // Can be made configurable
+                    callData: step.callData
+                }));
+                
+                const multicallData = multicall3Interface.encodeFunctionData("aggregate3", [calls]);
+                
+                // Calculate total ETH value
+                const totalValue = multicallSteps.reduce((sum, step) => {
+                    return sum + parseInt(step.value || '0');
+                }, 0);
+                
+                showMulticallResult(`
+                    <strong>🔨 Built Multicall Data:</strong><br>
+                    <strong>Target:</strong> 0xcA11bde05977b3631167028862bE2a173976CA11 (Multicall3)<br>
+                    <strong>Value:</strong> ${totalValue} wei<br>
+                    <strong>Steps:</strong> ${multicallSteps.length}<br>
+                    <strong>Data:</strong><br>
+                    <textarea readonly style="width: 100%; height: 150px;">${multicallData}</textarea><br>
+                    <button onclick="copyToClipboard('${multicallData}')" class="primary">📋 Copy Data</button>
+                    <button onclick="useMulticallForCCIP('${multicallData}', '${totalValue}')" class="success">🚀 Use for CCIP</button>
+                `, true);
+                
+            } catch (error) {
+                showMulticallResult(`❌ Build failed: ${error.message}`, false);
+            }
+        }
+
+        function previewMulticall() {
+            if (multicallSteps.length === 0) {
+                showMulticallResult('❌ No steps to preview', false);
+                return;
+            }
+            
+            let preview = '<strong>👀 Multicall Preview:</strong><br><br>';
+            
+            multicallSteps.forEach((step, index) => {
+                preview += `<strong>Step ${index + 1}:</strong> ${step.description}<br>`;
+                preview += `Target: ${step.target}<br>`;
+                preview += `Value: ${step.value} wei<br><br>`;
+            });
+            
+            const totalValue = multicallSteps.reduce((sum, step) => {
+                return sum + parseInt(step.value || '0');
+            }, 0);
+            
+            preview += `<strong>Total ETH Value: ${totalValue} wei</strong>`;
+            
+            showMulticallResult(preview, true);
+        }
+
+        function useMulticallForCCIP(data, value) {
+            // Auto-fill the CCIP form with multicall data
+            document.getElementById('targetContract').value = '0xcA11bde05977b3631167028862bE2a173976CA11'; // Multicall3
+            document.getElementById('callData').value = data;
+            document.getElementById('ethValue').value = value;
+            
+            // Scroll to CCIP section
+            document.querySelector('.ccip-section').scrollIntoView({ behavior: 'smooth' });
+            
+            showCCIPResult('✅ Multicall data loaded into CCIP form!', true);
+        }
+
+        function showMulticallResult(message, success) {
+            const result = document.getElementById('multicallResult');
+            result.innerHTML = message;
+            result.className = `result ${success ? 'success-result' : 'error-result'}`;
+        }
+
+        // ================================
+        // UTILITY FUNCTIONS
+        // ================================
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                console.log('Copied to clipboard');
+                // Could show a toast notification here
+            }).catch(err => {
+                console.error('Failed to copy: ', err);
+                // Fallback: select and copy
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+            });
+        }
+
+        // Initialize on page load
+        window.addEventListener('load', async () => {
+            console.log('🚀 Initializing YieldMax CCIP interface...');
+            
+            // Check for existing MetaMask connection
+            if (window.ethereum?.selectedAddress) {
+                console.log('Existing MetaMask connection detected');
+                await connectMetaMask();
+            } else {
+                showResult('👋 Ready to connect! Click MetaMask to get started.', true);
+            }
+            
+            // Initialize multicall display
+            updateMulticallDisplay();
+            
+            console.log('✅ Interface ready!');
+        });
+    </script>
+</body>
+</html> 

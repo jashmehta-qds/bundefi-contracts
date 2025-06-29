@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔍 YieldMax CCIP Debugger</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2196F3, #21CBF3);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .debug-section {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 25px;
+            margin-bottom: 25px;
+            border-left: 4px solid #2196F3;
+        }
+
+        .debug-section h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #555;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #2196F3;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #2196F3, #21CBF3);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: transform 0.2s;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #6c757d, #5a6268);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #dc3545, #c82333);
+        }
+
+        .results {
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        .quick-links {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .quick-link {
+            background: #fff;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .quick-link:hover {
+            border-color: #2196F3;
+            transform: translateY(-2px);
+        }
+
+        .quick-link h4 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .quick-link p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .chain-selector {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .chain-option {
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .chain-option.selected {
+            border-color: #2196F3;
+            background: #e3f2fd;
+        }
+
+        .chain-option:hover {
+            border-color: #2196F3;
+        }
+
+        .explorer-links {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 15px;
+        }
+
+        .explorer-link {
+            padding: 8px 16px;
+            background: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            font-size: 12px;
+            transition: background 0.3s;
+        }
+
+        .explorer-link:hover {
+            background: #0056b3;
+        }
+
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-weight: 600;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status.warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #2196F3;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .two-column {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .two-column {
+                grid-template-columns: 1fr;
+            }
+            .chain-selector {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 YieldMax CCIP Debugger</h1>
+            <p>Debug cross-chain transactions and executor failures</p>
+        </div>
+
+        <div class="content">
+            <!-- Quick Actions -->
+            <div class="quick-links">
+                <div class="quick-link" onclick="showSection('tx-debug')">
+                    <h4>🔍 Transaction Debug</h4>
+                    <p>Analyze transaction details, events, and failures</p>
+                </div>
+                <div class="quick-link" onclick="showSection('contract-check')">
+                    <h4>📋 Contract Check</h4>
+                    <p>Verify contract addresses and token information</p>
+                </div>
+                <div class="quick-link" onclick="showSection('failed-messages')">
+                    <h4>❌ Failed Messages</h4>
+                    <p>Check for failed CCIP messages</p>
+                </div>
+                <div class="quick-link" onclick="showSection('executor-debug')">
+                    <h4>⚙️ Executor Debug</h4>
+                    <p>Debug executor contract issues</p>
+                </div>
+            </div>
+
+            <!-- Transaction Debug Section -->
+            <div id="tx-debug" class="debug-section" style="display: none;">
+                <h3>🔍 Transaction Debug</h3>
+                
+                <div class="chain-selector">
+                    <div class="chain-option" onclick="selectChain('base', 'tx')" id="tx-base">
+                        <strong>Base Mainnet</strong>
+                        <br><small>YieldMax: 0xe97978aB28f4d340494293a519B8Ba7Ab6E9640F</small>
+                    </div>
+                    <div class="chain-option" onclick="selectChain('avalanche', 'tx')" id="tx-avalanche">
+                        <strong>Avalanche</strong>
+                        <br><small>YieldMax: 0x379154D8C0b0B19B773f841554f7b7Ad445cA244</small>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="tx-hash">Transaction Hash:</label>
+                    <input type="text" id="tx-hash" placeholder="0x..." />
+                </div>
+
+                <div class="form-group">
+                    <button class="btn" onclick="debugTransaction()">🔍 Debug Transaction</button>
+                    <button class="btn btn-secondary" onclick="openInExplorer('tx')">🌐 Open in Explorer</button>
+                </div>
+
+                <div id="tx-results" class="results" style="display: none;"></div>
+            </div>
+
+            <!-- Contract Check Section -->
+            <div id="contract-check" class="debug-section" style="display: none;">
+                <h3>📋 Contract Check</h3>
+                
+                <div class="chain-selector">
+                    <div class="chain-option" onclick="selectChain('base', 'contract')" id="contract-base">
+                        <strong>Base Mainnet</strong>
+                    </div>
+                    <div class="chain-option" onclick="selectChain('avalanche', 'contract')" id="contract-avalanche">
+                        <strong>Avalanche</strong>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="contract-address">Contract Address:</label>
+                    <input type="text" id="contract-address" placeholder="0x..." />
+                </div>
+
+                <div class="form-group">
+                    <button class="btn" onclick="checkContract()">🔍 Check Contract</button>
+                    <button class="btn btn-secondary" onclick="checkToken()">🪙 Check as Token</button>
+                    <button class="btn btn-secondary" onclick="openInExplorer('contract')">🌐 Open in Explorer</button>
+                </div>
+
+                <div id="contract-results" class="results" style="display: none;"></div>
+            </div>
+
+            <!-- Failed Messages Section -->
+            <div id="failed-messages" class="debug-section" style="display: none;">
+                <h3>❌ Failed Messages</h3>
+                
+                <div class="chain-selector">
+                    <div class="chain-option" onclick="selectChain('base', 'failed')" id="failed-base">
+                        <strong>Base Mainnet</strong>
+                    </div>
+                    <div class="chain-option" onclick="selectChain('avalanche', 'failed')" id="failed-avalanche">
+                        <strong>Avalanche</strong>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <button class="btn" onclick="checkFailedMessages()">📋 Check Failed Messages</button>
+                    <button class="btn btn-secondary" onclick="openInExplorer('yieldmax')">🌐 Open YieldMax in Explorer</button>
+                </div>
+
+                <div id="failed-results" class="results" style="display: none;"></div>
+            </div>
+
+            <!-- Executor Debug Section -->
+            <div id="executor-debug" class="debug-section" style="display: none;">
+                <h3>⚙️ Executor Debug</h3>
+                
+                <div class="chain-selector">
+                    <div class="chain-option" onclick="selectChain('base', 'executor')" id="executor-base">
+                        <strong>Base Mainnet</strong>
+                    </div>
+                    <div class="chain-option" onclick="selectChain('avalanche', 'executor')" id="executor-avalanche">
+                        <strong>Avalanche</strong>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="executor-address">Executor Address:</label>
+                    <input type="text" id="executor-address" placeholder="0x..." />
+                </div>
+
+                <div class="form-group">
+                    <button class="btn" onclick="debugExecutor()">⚙️ Debug Executor</button>
+                    <button class="btn btn-secondary" onclick="openInExplorer('executor')">🌐 Open in Explorer</button>
+                </div>
+
+                <div id="executor-results" class="results" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+    <script>
+        // Configuration
+        const CONFIG = {
+            chains: {
+                base: {
+                    name: 'Base Mainnet',
+                    rpc: 'https://mainnet.base.org',
+                    explorer: 'https://basescan.org',
+                    yieldmax: '0xe97978aB28f4d340494293a519B8Ba7Ab6E9640F',
+                    chainId: 8453
+                },
+                avalanche: {
+                    name: 'Avalanche',
+                    rpc: 'https://api.avax.network/ext/bc/C/rpc',
+                    explorer: 'https://snowtrace.io',
+                    yieldmax: '0x379154D8C0b0B19B773f841554f7b7Ad445cA244',
+                    chainId: 43114
+                }
+            }
+        };
+
+        let currentChain = {};
+        let currentSection = '';
+
+        // Complete YieldMax ABI
+        const YIELDMAX_ABI = [
+            // Events
+            "event CrossTxExecuted(address indexed sender, address indexed target, uint256 value, bytes data)",
+            "event EscrowRescued(address indexed user, uint256 amount)",
+            "event ERC20EscrowRescued(address indexed user, address token, uint256 amount)",
+            "event ERC20Received(address indexed token, address indexed sender, uint256 amount)",
+            "event ExecutorCreated(address indexed executor, address indexed target, uint256 deadline)",
+            "event ExecutorExecuted(address indexed executor, bool success)",
+            "event MessageFailed(bytes32 indexed messageId, bytes reason)",
+            "event MessageRecovered(bytes32 indexed messageId)",
+            "event OwnershipTransferred(address indexed previousOwner, address indexed newOwner)",
+            
+            // Functions
+            "function allowlistDestinationChain(uint64 _destinationChainSelector, bool allowed) external",
+            "function allowlistSourceChain(uint64 _sourceChainSelector, bool allowed) external",
+            "function allowlistedDestinationChains(uint64) external view returns (bool)",
+            "function allowlistedSourceChains(uint64) external view returns (bool)",
+            "function emergencyWithdraw(address beneficiary) external",
+            "function emergencyWithdrawToken(address beneficiary, address token) external",
+            "function estimateFee(uint64 destinationChainSelector, address receiver, address targetContract, uint256 value, address[] calldata tokenAddresses, uint256[] calldata tokenAmounts, bytes calldata callData) external view returns (uint256)",
+            "function getFailedMessages(uint256 offset, uint256 limit) external view returns (tuple(bytes32 messageId, uint8 errorCode)[] memory)",
+            "function owner() external view returns (address)",
+            "function pendingEscrowNative(address) external view returns (uint256)",
+            "function pendingEscrowERC20(address, address) external view returns (uint256)",
+            "function rescueEscrow() external",
+            "function rescueERC20Escrow(address token) external",
+            "function retryFailedMessage(bytes32 messageId, address tokenReceiver) external",
+            "function sendCrossChainExecution(uint64 destinationChainSelector, address receiver, address targetContract, uint256 value, address[] calldata tokenAddresses, uint256[] calldata tokenAmounts, bytes calldata callData) external payable",
+            "function transferOwnership(address newOwner) external",
+            "function usedPayloads(bytes32) external view returns (bool)"
+        ];
+
+        const ERC20_ABI = [
+            "function name() external view returns (string)",
+            "function symbol() external view returns (string)",
+            "function decimals() external view returns (uint8)",
+            "function totalSupply() external view returns (uint256)",
+            "function balanceOf(address) external view returns (uint256)"
+        ];
+
+        function showSection(sectionId) {
+            // Hide all sections
+            document.querySelectorAll('.debug-section').forEach(section => {
+                section.style.display = 'none';
+            });
+
+            // Show selected section
+            document.getElementById(sectionId).style.display = 'block';
+            currentSection = sectionId;
+
+            // Clear previous results
+            const resultsDiv = document.querySelector(`#${sectionId} .results`);
+            if (resultsDiv) {
+                resultsDiv.style.display = 'none';
+                resultsDiv.innerHTML = '';
+            }
+        }
+
+        function selectChain(chainName, section) {
+            currentChain = CONFIG.chains[chainName];
+            
+            // Update UI
+            document.querySelectorAll(`#${section}-base, #${section}-${chainName === 'base' ? 'avalanche' : 'base'}`).forEach(el => {
+                el.classList.remove('selected');
+            });
+            document.getElementById(`${section}-${chainName}`).classList.add('selected');
+        }
+
+        function showStatus(message, type = 'info') {
+            const resultsDiv = document.querySelector(`#${currentSection} .results`);
+            resultsDiv.style.display = 'block';
+            resultsDiv.innerHTML = `<div class="status ${type}">${message}</div>`;
+        }
+
+        function showResults(content) {
+            const resultsDiv = document.querySelector(`#${currentSection} .results`);
+            resultsDiv.style.display = 'block';
+            resultsDiv.innerHTML = content;
+        }
+
+        function showLoading(message) {
+            showStatus(`<div class="loading"></div> ${message}`, 'warning');
+        }
+
+        async function debugTransaction() {
+            const txHash = document.getElementById('tx-hash').value.trim();
+            
+            if (!txHash) {
+                showStatus('Please enter a transaction hash', 'error');
+                return;
+            }
+
+            if (!currentChain.rpc) {
+                showStatus('Please select a chain', 'error');
+                return;
+            }
+
+            showLoading('Debugging transaction...');
+
+            try {
+                const provider = new ethers.providers.JsonRpcProvider(currentChain.rpc);
+                
+                // Get transaction and receipt
+                const [tx, receipt] = await Promise.all([
+                    provider.getTransaction(txHash),
+                    provider.getTransactionReceipt(txHash)
+                ]);
+
+                if (!tx || !receipt) {
+                    showStatus('Transaction not found or still pending', 'error');
+                    return;
+                }
+
+                let results = `
+<h4>📋 Transaction Summary</h4>
+<strong>Status:</strong> ${receipt.status === 1 ? '✅ Success' : '❌ Failed'}<br>
+<strong>Block:</strong> ${receipt.blockNumber}<br>
+<strong>Gas Used:</strong> ${receipt.gasUsed.toString()}<br>
+<strong>From:</strong> ${receipt.from}<br>
+<strong>To:</strong> ${receipt.to}<br>
+<strong>Value:</strong> ${ethers.utils.formatEther(tx.value)} ETH<br>
+
+<div class="explorer-links">
+    <a href="${currentChain.explorer}/tx/${txHash}" target="_blank" class="explorer-link">🌐 View in Explorer</a>
+</div>
+
+<h4>📡 Event Analysis</h4>
+`;
+
+                // Analyze events
+                if (receipt.logs.length === 0) {
+                    results += 'No events emitted<br>';
+                } else {
+                    const yieldMaxInterface = new ethers.utils.Interface(YIELDMAX_ABI);
+                    let eventCount = 0;
+                    
+                    for (const log of receipt.logs) {
+                        try {
+                            const parsed = yieldMaxInterface.parseLog(log);
+                            eventCount++;
+                            results += `<strong>🎯 ${parsed.name}:</strong><br>`;
+                            
+                            switch (parsed.name) {
+                                case 'ExecutorCreated':
+                                    results += `&nbsp;&nbsp;Executor: ${parsed.args.executor}<br>`;
+                                    results += `&nbsp;&nbsp;Target: ${parsed.args.target}<br>`;
+                                    results += `&nbsp;&nbsp;Deadline: ${new Date(parsed.args.deadline * 1000).toISOString()}<br>`;
+                                    
+                                    // Check target contract
+                                    const targetCode = await provider.getCode(parsed.args.target);
+                                    if (targetCode === '0x') {
+                                        results += `&nbsp;&nbsp;⚠️ WARNING: Target has no code (EOA or non-deployed)<br>`;
+                                    } else {
+                                        results += `&nbsp;&nbsp;✅ Target is a valid contract<br>`;
+                                    }
+                                    break;
+                                    
+                                case 'ExecutorExecuted':
+                                    results += `&nbsp;&nbsp;Executor: ${parsed.args.executor}<br>`;
+                                    results += `&nbsp;&nbsp;Success: ${parsed.args.success ? '✅' : '❌'}<br>`;
+                                    break;
+                                    
+                                case 'CrossTxExecuted':
+                                    results += `&nbsp;&nbsp;Sender: ${parsed.args.sender}<br>`;
+                                    results += `&nbsp;&nbsp;Target: ${parsed.args.target}<br>`;
+                                    results += `&nbsp;&nbsp;Value: ${parsed.args.value} wei<br>`;
+                                    results += `&nbsp;&nbsp;Data: ${parsed.args.data}<br>`;
+                                    break;
+                                    
+                                case 'ERC20Received':
+                                    results += `&nbsp;&nbsp;Token: ${parsed.args.token}<br>`;
+                                    results += `&nbsp;&nbsp;Sender: ${parsed.args.sender}<br>`;
+                                    results += `&nbsp;&nbsp;Amount: ${parsed.args.amount}<br>`;
+                                    break;
+                                    
+                                case 'MessageFailed':
+                                    results += `&nbsp;&nbsp;Message ID: ${parsed.args.messageId}<br>`;
+                                    results += `&nbsp;&nbsp;Reason: ${parsed.args.reason}<br>`;
+                                    break;
+                                    
+                                case 'MessageRecovered':
+                                    results += `&nbsp;&nbsp;Message ID: ${parsed.args.messageId}<br>`;
+                                    break;
+                                    
+                                case 'EscrowRescued':
+                                    results += `&nbsp;&nbsp;User: ${parsed.args.user}<br>`;
+                                    results += `&nbsp;&nbsp;Amount: ${ethers.utils.formatEther(parsed.args.amount)} ETH<br>`;
+                                    break;
+                                    
+                                case 'ERC20EscrowRescued':
+                                    results += `&nbsp;&nbsp;User: ${parsed.args.user}<br>`;
+                                    results += `&nbsp;&nbsp;Token: ${parsed.args.token}<br>`;
+                                    results += `&nbsp;&nbsp;Amount: ${parsed.args.amount}<br>`;
+                                    break;
+                                    
+                                case 'OwnershipTransferred':
+                                    results += `&nbsp;&nbsp;Previous Owner: ${parsed.args.previousOwner}<br>`;
+                                    results += `&nbsp;&nbsp;New Owner: ${parsed.args.newOwner}<br>`;
+                                    break;
+                            }
+                            results += '<br>';
+                        } catch (error) {
+                            // Not a YieldMax event
+                        }
+                    }
+                    
+                    if (eventCount === 0) {
+                        results += 'No YieldMax events found<br>';
+                    }
+                }
+
+                showResults(results);
+
+            } catch (error) {
+                showStatus(`Error debugging transaction: ${error.message}`, 'error');
+            }
+        }
+
+        async function checkContract() {
+            const address = document.getElementById('contract-address').value.trim();
+            
+            if (!address) {
+                showStatus('Please enter a contract address', 'error');
+                return;
+            }
+
+            if (!currentChain.rpc) {
+                showStatus('Please select a chain', 'error');
+                return;
+            }
+
+            showLoading('Checking contract...');
+
+            try {
+                const provider = new ethers.providers.JsonRpcProvider(currentChain.rpc);
+                const code = await provider.getCode(address);
+
+                let results = `<h4>🔍 Contract Analysis for ${address}</h4>`;
+
+                if (code === '0x') {
+                    results += `<div class="status error">❌ Address has no code (EOA or non-deployed contract)</div>`;
+                } else {
+                    results += `<div class="status success">✅ Address is a valid contract</div>`;
+                    results += `<strong>Code Length:</strong> ${(code.length / 2 - 1)} bytes<br><br>`;
+                    
+                    // Try to get ERC20 info
+                    try {
+                        const contract = new ethers.Contract(address, ERC20_ABI, provider);
+                        const [name, symbol, decimals] = await Promise.all([
+                            contract.name().catch(() => 'N/A'),
+                            contract.symbol().catch(() => 'N/A'),
+                            contract.decimals().catch(() => 'N/A')
+                        ]);
+                        
+                        if (name !== 'N/A' && symbol !== 'N/A') {
+                            results += `<h4>📄 ERC20 Token Info:</h4>`;
+                            results += `<strong>Name:</strong> ${name}<br>`;
+                            results += `<strong>Symbol:</strong> ${symbol}<br>`;
+                            results += `<strong>Decimals:</strong> ${decimals}<br>`;
+                        } else {
+                            results += `<div class="status warning">📄 Not a standard ERC20 token</div>`;
+                        }
+                    } catch (error) {
+                        results += `<div class="status warning">📄 Could not determine contract type</div>`;
+                    }
+                }
+
+                results += `
+<div class="explorer-links">
+    <a href="${currentChain.explorer}/address/${address}" target="_blank" class="explorer-link">🌐 View in Explorer</a>
+</div>
+`;
+
+                showResults(results);
+
+            } catch (error) {
+                showStatus(`Error checking contract: ${error.message}`, 'error');
+            }
+        }
+
+        async function checkToken() {
+            const address = document.getElementById('contract-address').value.trim();
+            
+            if (!address) {
+                showStatus('Please enter a token address', 'error');
+                return;
+            }
+
+            if (!currentChain.rpc) {
+                showStatus('Please select a chain', 'error');
+                return;
+            }
+
+            showLoading('Checking token...');
+
+            try {
+                const provider = new ethers.providers.JsonRpcProvider(currentChain.rpc);
+                const contract = new ethers.Contract(address, ERC20_ABI, provider);
+                
+                const [name, symbol, decimals, totalSupply] = await Promise.all([
+                    contract.name(),
+                    contract.symbol(),
+                    contract.decimals(),
+                    contract.totalSupply()
+                ]);
+
+                const results = `
+<h4>🪙 Token Information for ${address}</h4>
+<strong>Name:</strong> ${name}<br>
+<strong>Symbol:</strong> ${symbol}<br>
+<strong>Decimals:</strong> ${decimals}<br>
+<strong>Total Supply:</strong> ${ethers.utils.formatUnits(totalSupply, decimals)}<br>
+
+<div class="explorer-links">
+    <a href="${currentChain.explorer}/token/${address}" target="_blank" class="explorer-link">🌐 View Token in Explorer</a>
+</div>
+`;
+
+                showResults(results);
+
+            } catch (error) {
+                showStatus(`Error checking token: ${error.message}`, 'error');
+            }
+        }
+
+        async function checkFailedMessages() {
+            if (!currentChain.rpc) {
+                showStatus('Please select a chain', 'error');
+                return;
+            }
+
+            showLoading('Checking failed messages...');
+
+            try {
+                const provider = new ethers.providers.JsonRpcProvider(currentChain.rpc);
+                const contract = new ethers.Contract(currentChain.yieldmax, YIELDMAX_ABI, provider);
+                
+                const failedMessages = await contract.getFailedMessages(0, 10);
+
+                let results = `<h4>📋 Failed Messages on ${currentChain.name}</h4>`;
+
+                if (failedMessages.length === 0) {
+                    results += `<div class="status success">✅ No failed messages found</div>`;
+                } else {
+                    results += `<div class="status warning">⚠️ Found ${failedMessages.length} failed messages:</div><br>`;
+                    
+                    failedMessages.forEach((msg, index) => {
+                        results += `<strong>${index + 1}. Message ID:</strong> ${msg.messageId}<br>`;
+                        results += `<strong>Source Chain:</strong> ${msg.sourceChainSelector}<br>`;
+                        results += `<strong>Tokens:</strong> ${msg.tokens.length} token(s)<br><br>`;
+                    });
+                }
+
+                results += `
+<div class="explorer-links">
+    <a href="${currentChain.explorer}/address/${currentChain.yieldmax}" target="_blank" class="explorer-link">🌐 View YieldMax Contract</a>
+</div>
+`;
+
+                showResults(results);
+
+            } catch (error) {
+                showStatus(`Error checking failed messages: ${error.message}`, 'error');
+            }
+        }
+
+        async function debugExecutor() {
+            const address = document.getElementById('executor-address').value.trim();
+            
+            if (!address) {
+                showStatus('Please enter an executor address', 'error');
+                return;
+            }
+
+            if (!currentChain.rpc) {
+                showStatus('Please select a chain', 'error');
+                return;
+            }
+
+            showLoading('Debugging executor...');
+
+            try {
+                const provider = new ethers.providers.JsonRpcProvider(currentChain.rpc);
+                
+                const [code, balance] = await Promise.all([
+                    provider.getCode(address),
+                    provider.getBalance(address)
+                ]);
+
+                let results = `<h4>⚙️ Executor Debug for ${address}</h4>`;
+
+                if (code === '0x') {
+                    results += `<div class="status success">✅ Executor self-destructed (normal cleanup)</div>`;
+                } else {
+                    results += `<div class="status warning">⚠️ Executor still exists - might indicate incomplete execution</div>`;
+                }
+
+                results += `<strong>ETH Balance:</strong> ${ethers.utils.formatEther(balance)} ETH<br>`;
+
+                if (balance.gt(0)) {
+                    results += `<div class="status warning">💰 Executor has remaining ETH</div>`;
+                }
+
+                results += `
+<div class="explorer-links">
+    <a href="${currentChain.explorer}/address/${address}" target="_blank" class="explorer-link">🌐 View in Explorer</a>
+</div>
+`;
+
+                showResults(results);
+
+            } catch (error) {
+                showStatus(`Error debugging executor: ${error.message}`, 'error');
+            }
+        }
+
+        function openInExplorer(type) {
+            if (!currentChain.explorer) {
+                showStatus('Please select a chain first', 'error');
+                return;
+            }
+
+            let url = '';
+            
+            switch (type) {
+                case 'tx':
+                    const txHash = document.getElementById('tx-hash').value.trim();
+                    if (!txHash) {
+                        showStatus('Please enter a transaction hash', 'error');
+                        return;
+                    }
+                    url = `${currentChain.explorer}/tx/${txHash}`;
+                    break;
+                    
+                case 'contract':
+                    const contractAddress = document.getElementById('contract-address').value.trim();
+                    if (!contractAddress) {
+                        showStatus('Please enter a contract address', 'error');
+                        return;
+                    }
+                    url = `${currentChain.explorer}/address/${contractAddress}`;
+                    break;
+                    
+                case 'executor':
+                    const executorAddress = document.getElementById('executor-address').value.trim();
+                    if (!executorAddress) {
+                        showStatus('Please enter an executor address', 'error');
+                        return;
+                    }
+                    url = `${currentChain.explorer}/address/${executorAddress}`;
+                    break;
+                    
+                case 'yieldmax':
+                    url = `${currentChain.explorer}/address/${currentChain.yieldmax}`;
+                    break;
+            }
+
+            if (url) {
+                window.open(url, '_blank');
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            showSection('tx-debug');
+        });
+    </script>
+</body>
+</html> 

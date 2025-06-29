@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wallet Connect - ERC20 Approval</title>
+    <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+        .wallet-section {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            border: 2px solid #e9ecef;
+        }
+        .approval-section {
+            background: #fff3cd;
+            border: 2px solid #ffeaa7;
+            padding: 25px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-weight: bold;
+            text-align: center;
+        }
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.pending {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #333;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            box-sizing: border-box;
+            font-family: monospace;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        input:focus, select:focus, textarea:focus {
+            border-color: #667eea;
+            outline: none;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 25px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            margin-right: 10px;
+            margin-bottom: 10px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        .preset-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .preset-buttons button {
+            background: #28a745;
+            font-size: 14px;
+            padding: 10px 15px;
+        }
+        .preset-buttons button:hover {
+            background: #218838;
+        }
+        .transaction-details {
+            background: #e8f5e8;
+            border: 1px solid #4caf50;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-family: monospace;
+            word-break: break-all;
+        }
+        .error {
+            background: #ffe8e8;
+            border: 1px solid #f44336;
+            color: #d32f2f;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        .network-info {
+            background: #e3f2fd;
+            padding: 10px;
+            border-radius: 6px;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+        .balance-info {
+            background: #f3e5f5;
+            padding: 10px;
+            border-radius: 6px;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 ERC20 Approval Wallet</h1>
+        
+        <!-- Wallet Connection Section -->
+        <div class="wallet-section">
+            <h3>🦊 Wallet Connection</h3>
+            <div id="walletStatus" class="status disconnected">
+                Wallet Not Connected
+            </div>
+            
+            <div class="grid">
+                <div>
+                    <button id="connectBtn" onclick="connectWallet()">Connect MetaMask</button>
+                    <button id="disconnectBtn" onclick="disconnectWallet()" disabled>Disconnect</button>
+                </div>
+                <div>
+                    <div id="networkInfo" class="network-info" style="display: none;">
+                        <strong>Network:</strong> <span id="networkName">-</span><br>
+                        <strong>Chain ID:</strong> <span id="chainId">-</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="accountInfo" style="display: none;">
+                <div class="form-group">
+                    <label>Connected Account:</label>
+                    <input type="text" id="accountAddress" readonly>
+                </div>
+                <div id="balanceInfo" class="balance-info">
+                    <strong>ETH Balance:</strong> <span id="ethBalance">Loading...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- ERC20 Approval Section -->
+        <div class="approval-section">
+            <h3>✅ ERC20 Token Approval</h3>
+            
+            <div class="preset-buttons">
+                <button onclick="loadPreset('yieldMaxUSDC')">YieldMax USDC</button>
+                <button onclick="loadPreset('unlimitedUSDC')">Unlimited USDC</button>
+                <button onclick="loadPreset('revokeUSDC')">Revoke USDC</button>
+                <button onclick="loadPreset('customToken')">Custom Token</button>
+            </div>
+            
+            <div class="grid">
+                <div>
+                    <div class="form-group">
+                        <label>Token Contract Address:</label>
+                        <input type="text" id="tokenAddress" placeholder="0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Spender Address:</label>
+                        <input type="text" id="spenderAddress" placeholder="0xe97978aB28f4d340494293a519B8Ba7Ab6E9640F">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Approval Type:</label>
+                        <select id="approvalType" onchange="updateApprovalType()">
+                            <option value="specific">Specific Amount</option>
+                            <option value="unlimited">Unlimited</option>
+                            <option value="revoke">Revoke (Set to 0)</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div>
+                    <div class="form-group">
+                        <label>Amount:</label>
+                        <input type="text" id="approvalAmount" placeholder="1000">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Token Decimals:</label>
+                        <input type="number" id="tokenDecimals" value="6" min="0" max="18">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Gas Limit (optional):</label>
+                        <input type="text" id="gasLimit" placeholder="70000">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <button id="approveBtn" onclick="executeApproval()" disabled>
+                    🚀 Execute Approval
+                </button>
+                <button onclick="previewTransaction()">👁️ Preview Transaction</button>
+                <button onclick="checkAllowance()">🔍 Check Current Allowance</button>
+            </div>
+            
+            <div id="transactionResult"></div>
+        </div>
+    </div>
+
+    <script>
+        let provider = null;
+        let signer = null;
+        let userAccount = null;
+        
+        // Network configurations
+        const networks = {
+            1: { name: 'Ethereum Mainnet', currency: 'ETH' },
+            8453: { name: 'Base', currency: 'ETH' },
+            43114: { name: 'Avalanche', currency: 'AVAX' },
+            137: { name: 'Polygon', currency: 'MATIC' },
+            42161: { name: 'Arbitrum', currency: 'ETH' }
+        };
+        
+        // Token presets
+        const tokenPresets = {
+            yieldMaxUSDC: {
+                tokenAddress: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+                spenderAddress: '0xe97978aB28f4d340494293a519B8Ba7Ab6E9640F',
+                amount: '1000',
+                decimals: 6,
+                type: 'specific'
+            },
+            unlimitedUSDC: {
+                tokenAddress: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+                spenderAddress: '0xe97978aB28f4d340494293a519B8Ba7Ab6E9640F',
+                amount: '',
+                decimals: 6,
+                type: 'unlimited'
+            },
+            revokeUSDC: {
+                tokenAddress: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+                spenderAddress: '0xe97978aB28f4d340494293a519B8Ba7Ab6E9640F',
+                amount: '0',
+                decimals: 6,
+                type: 'revoke'
+            },
+            customToken: {
+                tokenAddress: '',
+                spenderAddress: '',
+                amount: '100',
+                decimals: 18,
+                type: 'specific'
+            }
+        };
+
+        // Connect to wallet
+        async function connectWallet() {
+            try {
+                if (typeof window.ethereum === 'undefined') {
+                    throw new Error('MetaMask is not installed');
+                }
+
+                updateStatus('Connecting to wallet...', 'pending');
+                
+                provider = new ethers.providers.Web3Provider(window.ethereum);
+                await provider.send('eth_requestAccounts', []);
+                signer = provider.getSigner();
+                userAccount = await signer.getAddress();
+                
+                // Update UI
+                document.getElementById('accountAddress').value = userAccount;
+                document.getElementById('accountInfo').style.display = 'block';
+                document.getElementById('connectBtn').disabled = true;
+                document.getElementById('disconnectBtn').disabled = false;
+                document.getElementById('approveBtn').disabled = false;
+                
+                // Get network info
+                const network = await provider.getNetwork();
+                updateNetworkInfo(network);
+                
+                // Get balance
+                updateBalance();
+                
+                updateStatus(`Connected to ${userAccount.slice(0, 6)}...${userAccount.slice(-4)}`, 'connected');
+                
+                // Listen for account changes
+                window.ethereum.on('accountsChanged', handleAccountsChanged);
+                window.ethereum.on('chainChanged', handleChainChanged);
+                
+            } catch (error) {
+                console.error('Connection failed:', error);
+                updateStatus(`Connection failed: ${error.message}`, 'disconnected');
+            }
+        }
+
+        // Disconnect wallet
+        function disconnectWallet() {
+            provider = null;
+            signer = null;
+            userAccount = null;
+            
+            document.getElementById('accountInfo').style.display = 'none';
+            document.getElementById('networkInfo').style.display = 'none';
+            document.getElementById('connectBtn').disabled = false;
+            document.getElementById('disconnectBtn').disabled = true;
+            document.getElementById('approveBtn').disabled = true;
+            
+            updateStatus('Wallet Disconnected', 'disconnected');
+            
+            // Remove listeners
+            if (window.ethereum) {
+                window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
+                window.ethereum.removeListener('chainChanged', handleChainChanged);
+            }
+        }
+
+        // Handle account changes
+        function handleAccountsChanged(accounts) {
+            if (accounts.length === 0) {
+                disconnectWallet();
+            } else {
+                connectWallet();
+            }
+        }
+
+        // Handle chain changes
+        function handleChainChanged(chainId) {
+            window.location.reload();
+        }
+
+        // Update network info
+        function updateNetworkInfo(network) {
+            const networkInfo = networks[network.chainId];
+            document.getElementById('networkName').textContent = networkInfo?.name || 'Unknown';
+            document.getElementById('chainId').textContent = network.chainId;
+            document.getElementById('networkInfo').style.display = 'block';
+        }
+
+        // Update balance
+        async function updateBalance() {
+            try {
+                const balance = await provider.getBalance(userAccount);
+                const balanceFormatted = ethers.utils.formatEther(balance);
+                document.getElementById('ethBalance').textContent = `${parseFloat(balanceFormatted).toFixed(4)} ETH`;
+            } catch (error) {
+                document.getElementById('ethBalance').textContent = 'Error loading balance';
+            }
+        }
+
+        // Update status
+        function updateStatus(message, type) {
+            const statusEl = document.getElementById('walletStatus');
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
+        }
+
+        // Load preset configurations
+        function loadPreset(presetName) {
+            const preset = tokenPresets[presetName];
+            if (preset) {
+                document.getElementById('tokenAddress').value = preset.tokenAddress;
+                document.getElementById('spenderAddress').value = preset.spenderAddress;
+                document.getElementById('approvalAmount').value = preset.amount;
+                document.getElementById('tokenDecimals').value = preset.decimals;
+                document.getElementById('approvalType').value = preset.type;
+                updateApprovalType();
+            }
+        }
+
+        // Update approval type
+        function updateApprovalType() {
+            const type = document.getElementById('approvalType').value;
+            const amountField = document.getElementById('approvalAmount');
+            
+            switch (type) {
+                case 'unlimited':
+                    amountField.value = 'MAX';
+                    amountField.disabled = true;
+                    break;
+                case 'revoke':
+                    amountField.value = '0';
+                    amountField.disabled = true;
+                    break;
+                default:
+                    amountField.disabled = false;
+                    if (amountField.value === 'MAX' || amountField.value === '0') {
+                        amountField.value = '1000';
+                    }
+            }
+        }
+
+        // Preview transaction
+        async function previewTransaction() {
+            try {
+                const { tokenAddress, spenderAddress, amount } = getApprovalParams();
+                
+                // Create contract instance
+                const tokenContract = new ethers.Contract(
+                    tokenAddress,
+                    ['function approve(address spender, uint256 amount) returns (bool)'],
+                    signer
+                );
+
+                // Estimate gas
+                const estimatedGas = await tokenContract.estimateGas.approve(spenderAddress, amount);
+                const gasPrice = await provider.getGasPrice();
+                const estimatedCost = estimatedGas.mul(gasPrice);
+
+                showResult(`
+                    <strong>🔍 Transaction Preview:</strong><br>
+                    <strong>Token:</strong> ${tokenAddress}<br>
+                    <strong>Spender:</strong> ${spenderAddress}<br>
+                    <strong>Amount:</strong> ${amount.toString()}<br>
+                    <strong>Estimated Gas:</strong> ${estimatedGas.toString()}<br>
+                    <strong>Gas Price:</strong> ${ethers.utils.formatUnits(gasPrice, 'gwei')} gwei<br>
+                    <strong>Estimated Cost:</strong> ${ethers.utils.formatEther(estimatedCost)} ETH
+                `, false);
+            } catch (error) {
+                showResult(`Preview failed: ${error.message}`, true);
+            }
+        }
+
+        // Check current allowance
+        async function checkAllowance() {
+            try {
+                const tokenAddress = document.getElementById('tokenAddress').value;
+                const spenderAddress = document.getElementById('spenderAddress').value;
+                
+                if (!tokenAddress || !spenderAddress) {
+                    throw new Error('Please enter token and spender addresses');
+                }
+
+                const tokenContract = new ethers.Contract(
+                    tokenAddress,
+                    ['function allowance(address owner, address spender) view returns (uint256)'],
+                    provider
+                );
+
+                const allowance = await tokenContract.allowance(userAccount, spenderAddress);
+                const decimals = parseInt(document.getElementById('tokenDecimals').value);
+                const allowanceFormatted = ethers.utils.formatUnits(allowance, decimals);
+
+                showResult(`
+                    <strong>🔍 Current Allowance:</strong><br>
+                    <strong>Owner:</strong> ${userAccount}<br>
+                    <strong>Spender:</strong> ${spenderAddress}<br>
+                    <strong>Raw Amount:</strong> ${allowance.toString()}<br>
+                    <strong>Formatted:</strong> ${allowanceFormatted} tokens
+                `, false);
+            } catch (error) {
+                showResult(`Allowance check failed: ${error.message}`, true);
+            }
+        }
+
+        // Get approval parameters
+        function getApprovalParams() {
+            const tokenAddress = document.getElementById('tokenAddress').value;
+            const spenderAddress = document.getElementById('spenderAddress').value;
+            const approvalType = document.getElementById('approvalType').value;
+            const decimals = parseInt(document.getElementById('tokenDecimals').value);
+            
+            let amount;
+            switch (approvalType) {
+                case 'unlimited':
+                    amount = ethers.constants.MaxUint256;
+                    break;
+                case 'revoke':
+                    amount = ethers.BigNumber.from(0);
+                    break;
+                default:
+                    const amountStr = document.getElementById('approvalAmount').value;
+                    amount = ethers.utils.parseUnits(amountStr, decimals);
+            }
+
+            return { tokenAddress, spenderAddress, amount };
+        }
+
+        // Execute approval
+        async function executeApproval() {
+            try {
+                if (!signer) {
+                    throw new Error('Please connect your wallet first');
+                }
+
+                updateStatus('Preparing transaction...', 'pending');
+                
+                const { tokenAddress, spenderAddress, amount } = getApprovalParams();
+                const gasLimit = document.getElementById('gasLimit').value;
+
+                // Create contract instance
+                const tokenContract = new ethers.Contract(
+                    tokenAddress,
+                    ['function approve(address spender, uint256 amount) returns (bool)'],
+                    signer
+                );
+
+                // Prepare transaction options
+                const txOptions = {};
+                if (gasLimit) {
+                    txOptions.gasLimit = gasLimit;
+                }
+
+                updateStatus('Waiting for user confirmation...', 'pending');
+                
+                // Execute transaction
+                const tx = await tokenContract.approve(spenderAddress, amount, txOptions);
+                
+                updateStatus('Transaction submitted...', 'pending');
+                showResult(`
+                    <strong>🚀 Transaction Submitted!</strong><br>
+                    <strong>Hash:</strong> ${tx.hash}<br>
+                    <strong>Waiting for confirmation...</strong>
+                `, false);
+
+                // Wait for confirmation
+                const receipt = await tx.wait();
+                
+                updateStatus('Transaction confirmed!', 'connected');
+                showResult(`
+                    <strong>✅ Approval Successful!</strong><br>
+                    <strong>Transaction Hash:</strong> ${receipt.transactionHash}<br>
+                    <strong>Block Number:</strong> ${receipt.blockNumber}<br>
+                    <strong>Gas Used:</strong> ${receipt.gasUsed.toString()}<br>
+                    <strong>Status:</strong> ${receipt.status === 1 ? 'Success' : 'Failed'}
+                `, false);
+
+                // Update balance
+                updateBalance();
+
+            } catch (error) {
+                console.error('Approval failed:', error);
+                updateStatus('Transaction failed', 'connected');
+                
+                let errorMessage = error.message;
+                if (error.code === 4001) {
+                    errorMessage = 'Transaction rejected by user';
+                } else if (error.code === -32603) {
+                    errorMessage = 'Internal JSON-RPC error';
+                }
+                
+                showResult(`Approval failed: ${errorMessage}`, true);
+            }
+        }
+
+        // Show result
+        function showResult(message, isError) {
+            const resultEl = document.getElementById('transactionResult');
+            resultEl.innerHTML = message;
+            resultEl.className = isError ? 'transaction-details error' : 'transaction-details';
+        }
+
+        // Initialize on page load
+        window.addEventListener('load', () => {
+            // Check if already connected
+            if (window.ethereum && window.ethereum.selectedAddress) {
+                connectWallet();
+            }
+        });
+    </script>
+</body>
+</html> 
